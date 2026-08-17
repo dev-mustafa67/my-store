@@ -11,6 +11,7 @@ export default function ProductsPage() {
   const { isOwner, loading: roleLoading } = useUserRole();
   const [variants, setVariants] = useState<any[]>([]);
   const [name, setName] = useState('');
+  const [category, setCategory] = useState('');
   const [color, setColor] = useState('');
   const [size, setSize] = useState('');
   const [cost, setCost] = useState('');
@@ -38,7 +39,7 @@ export default function ProductsPage() {
 
     const { data: product } = await supabase
       .from('products')
-      .insert({ name, store_id: profile!.store_id })
+      .insert({ name, category, store_id: profile!.store_id })
       .select()
       .single();
 
@@ -51,7 +52,7 @@ export default function ProductsPage() {
       barcode: crypto.randomUUID().slice(0, 12),
     });
 
-    setName(''); setColor(''); setSize(''); setCost(''); setPrice(''); setQty('');
+    setName(''); setCategory(''); setColor(''); setSize(''); setCost(''); setPrice(''); setQty('');
     setSaving(false);
     loadProducts();
   }
@@ -67,7 +68,7 @@ export default function ProductsPage() {
             <h2 className="text-lg font-bold text-gray-800">إضافة منتج جديد</h2>
             <div className="grid grid-cols-2 gap-3">
               <input required placeholder="اسم القطعة" value={name} onChange={e => setName(e.target.value)} className="h-11 px-3 rounded-lg border" />
-              <input placeholder="التصنيف" className="h-11 px-3 rounded-lg border" />
+              <input placeholder="التصنيف" value={category} onChange={e => setCategory(e.target.value)} className="h-11 px-3 rounded-lg border" />
               <input placeholder="اللون" value={color} onChange={e => setColor(e.target.value)} className="h-11 px-3 rounded-lg border" />
               <input placeholder="المقاس" value={size} onChange={e => setSize(e.target.value)} className="h-11 px-3 rounded-lg border" />
               <input required type="number" placeholder="سعر الشراء" value={cost} onChange={e => setCost(e.target.value)} className="h-11 px-3 rounded-lg border" />
