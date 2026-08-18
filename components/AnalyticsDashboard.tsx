@@ -100,31 +100,39 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
     <div dir="rtl" className="max-w-5xl mx-auto p-6 space-y-6">
       <h2 className="text-2xl font-bold text-gray-800">لوحة التحليلات</h2>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl p-5 shadow">
           <h3 className="font-bold text-gray-700 mb-4">أعلى 5 قطع ربحاً (آخر 30 يوم)</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={topSellers} layout="vertical">
-              <XAxis type="number" hide />
-              <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(v: number) => `${v.toLocaleString()} د.ع`} />
-              <Bar dataKey="profit" radius={[0, 8, 8, 0]}>
-                {topSellers.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          {topSellers.length === 0 ? (
+            <p className="text-gray-400 text-sm py-10 text-center">لا توجد مبيعات مسجّلة خلال آخر 30 يوماً بعد.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={topSellers} layout="vertical">
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(v: number) => `${v.toLocaleString()} د.ع`} />
+                <Bar dataKey="profit" radius={[0, 8, 8, 0]}>
+                  {topSellers.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl p-5 shadow">
           <h3 className="font-bold text-gray-700 mb-4">اتجاه الربح اليومي</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={profitTrend}>
-              <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v: number) => `${v.toLocaleString()} د.ع`} />
-              <Line type="monotone" dataKey="profit" stroke="#4f46e5" strokeWidth={3} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+          {profitTrend.length === 0 ? (
+            <p className="text-gray-400 text-sm py-10 text-center">لا توجد مبيعات مسجّلة خلال آخر 30 يوماً بعد.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={profitTrend}>
+                <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip formatter={(v: number) => `${v.toLocaleString()} د.ع`} />
+                <Line type="monotone" dataKey="profit" stroke="#4f46e5" strokeWidth={3} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
 
