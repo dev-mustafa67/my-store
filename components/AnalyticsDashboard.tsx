@@ -24,7 +24,7 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
 
     const { data: sales } = await supabase
       .from('sales')
-      .select('net_profit, sold_at, product_variants(products(name))')
+      .select('sale_price_at_time, cost_price_at_time, quantity_sold, sold_at, product_variants(products(name))')
       .eq('store_id', storeId)
       .gte('sold_at', thirtyDaysAgo.toISOString());
 
@@ -33,9 +33,10 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
 
     for (const s of sales ?? []) {
       const name = (s as any).product_variants?.products?.name ?? 'غير معروف';
-      byProduct[name] = (byProduct[name] ?? 0) + s.net_profit;
+      const profit = (Number(s.sale_price_at_time) - Number(s.cost_price_at_time)) * Number(s.quantity_sold);
+      byProduct[name] = (byProduct[name] ?? 0) + profit;
       const day = new Date(s.sold_at).toLocaleDateString('ar-IQ', { day: 'numeric', month: 'short' });
-      byDay[day] = (byDay[day] ?? 0) + s.net_profit;
+      byDay[day] = (byDay[day] ?? 0) + profit;
     }
 
     setTopSellers(
