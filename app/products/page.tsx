@@ -10,6 +10,7 @@ import { Plus, Save } from 'lucide-react';
 export default function ProductsPage() {
   const { isOwner, loading: roleLoading } = useUserRole();
   const [variants, setVariants] = useState<any[]>([]);
+  const [storeId, setStoreId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [color, setColor] = useState('');
@@ -22,6 +23,10 @@ export default function ProductsPage() {
   useEffect(() => { loadProducts(); }, []);
 
   async function loadProducts() {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: profile } = await supabase.from('users_profile').select('store_id').eq('id', user!.id).single();
+    setStoreId(profile!.store_id);
+
     const { data } = await supabase
       .from('product_variants')
       .select('id, color, size, quantity, cost_price, sale_price, products(name)')
@@ -63,6 +68,16 @@ export default function ProductsPage() {
     <div dir="rtl">
       <NavBar />
       <div className="max-w-3xl mx-auto p-6 space-y-6">
+        {isOwner && storeId && (
+          <div className="bg-indigo-50 rounded-2xl p-5">
+            <p className="font-bold text-indigo-800 mb-2">📨 دعوة موظف جديد</p>
+            <p className="text-sm text-indigo-700 mb-2">أرسل هذا الرابط لموظفك — سيُنشئ حساباً مرتبطاً بمحلك تلقائياً بصلاحية "موظف":</p>
+            <code className="block bg-white text-xs p-2 rounded-lg break-all">
+              {typeof window !== 'undefined' ? `${window.location.origin}/signup?store=${storeId}` : ''}
+            </code>
+          </div>
+        )}
+
         {isOwner && (
           <form onSubmit={handleAdd} className="bg-white rounded-2xl shadow p-6 space-y-4">
             <h2 className="text-lg font-bold text-gray-800">إضافة منتج جديد</h2>
