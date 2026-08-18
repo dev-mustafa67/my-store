@@ -81,7 +81,7 @@ export default function ProductsPage() {
         {isOwner && (
           <form onSubmit={handleAdd} className="bg-white rounded-2xl shadow p-6 space-y-4">
             <h2 className="text-lg font-bold text-gray-800">إضافة منتج جديد</h2>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <input required placeholder="اسم القطعة" value={name} onChange={e => setName(e.target.value)} className="h-11 px-3 rounded-lg border" />
               <input placeholder="التصنيف" value={category} onChange={e => setCategory(e.target.value)} className="h-11 px-3 rounded-lg border" />
               <input placeholder="اللون" value={color} onChange={e => setColor(e.target.value)} className="h-11 px-3 rounded-lg border" />
