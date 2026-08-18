@@ -1,11 +1,11 @@
 // app/signup/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase-client';
 
-export default function SignupPage() {
+function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteStoreId = searchParams.get('store'); // موجود فقط في رابط دعوة موظف
@@ -41,7 +41,6 @@ export default function SignupPage() {
     let storeId = inviteStoreId;
 
     if (!isEmployeeInvite) {
-      // مالك جديد: أنشئ محلاً جديداً له
       const { data: store, error: storeError } = await supabase
         .from('stores')
         .insert({ name: storeName })
@@ -131,5 +130,13 @@ export default function SignupPage() {
         </p>
       </form>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">جاري التحميل...</div>}>
+      <SignupForm />
+    </Suspense>
   );
 }
