@@ -70,7 +70,7 @@ export default function BillingPage() {
           <div className="bg-white rounded-2xl shadow p-6">
             <h3 className="font-bold text-gray-800 mb-3">تجديد الاشتراك — {MONTHLY_PRICE.toLocaleString()} د.ع / شهرياً</h3>
             <p className="text-sm text-gray-600 mb-4">
-              حوّل المبلغ عبر زين كاش أو تحويل بنكي إلى: <b className="text-indigo-600">07XXXXXXXXX (زين كاش)</b>،
+              حوّل المبلغ عبر زين كاش أو تحويل بنكي إلى: <b className="text-indigo-600">07747970914 (زين كاش)</b>،
               ثم أدخل رقم العملية أو ملاحظة تثبت التحويل أدناه، وسنراجعها ونفعّل اشتراكك خلال ساعات.
             </p>
 
