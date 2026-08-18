@@ -63,6 +63,10 @@ export default function LoginPage() {
         >
           {loading ? 'جاري الدخول...' : 'دخول'}
         </button>
+
+        <p className="text-center text-sm text-gray-500">
+          مالك محل جديد؟ <a href="/signup" className="text-indigo-600 font-semibold">أنشئ حساباً</a>
+        </p>
       </form>
     </div>
   );
