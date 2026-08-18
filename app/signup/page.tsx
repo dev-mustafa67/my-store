@@ -31,7 +31,7 @@ function SignupForm() {
 
       if (authError) throw authError;
       const userId = authData.user?.id;
-      if (!userId) throw لم يتم إنشاء المستخدم بنجاح;
+      if (!userId) throw new Error('لم يتم إنشاء المستخدم بنجاح');
 
       let targetStoreId = inviteStoreId;
 
