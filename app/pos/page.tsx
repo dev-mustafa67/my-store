@@ -109,33 +109,34 @@ export default function POSPage() {
   return (
     <div dir="rtl">
       <NavBar />
-      <div className="max-w-3xl mx-auto p-6 space-y-6">
-        <div className={`rounded-xl px-4 py-2 text-sm font-bold ${online ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-          {online ? '🟢 متصل — المبيعات تُزامَن فوراً' : '🟡 غير متصل — المبيعات تُحفظ محلياً وستُزامَن عند عودة الإنترنت'}
+      <div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-6">
+        <div className={`rounded-xl px-4 py-2.5 text-sm font-bold flex items-center gap-2 ${online ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+          <span className={`w-2 h-2 rounded-full ${online ? 'bg-green-500' : 'bg-amber-500'}`} />
+          {online ? 'متصل — المبيعات تُزامَن فوراً' : 'غير متصل — المبيعات تُحفظ محلياً وستُزامَن عند عودة الإنترنت'}
         </div>
 
-        <div className="bg-white rounded-2xl shadow p-6 flex gap-3 flex-wrap items-center">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex gap-3 flex-wrap items-center">
           <select
             value={selectedCustomer}
             onChange={(e) => setSelectedCustomer(e.target.value)}
-            className="h-11 px-3 rounded-lg border flex-1"
+            className="h-11 px-3 rounded-lg border border-gray-200 flex-1 min-w-[140px]"
           >
             <option value="">بدون زبون محدد</option>
             {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex items-center gap-2 text-sm bg-gray-50 px-3 h-11 rounded-lg">
             <input type="checkbox" checked={onCredit} onChange={(e) => setOnCredit(e.target.checked)} />
             بيع بالدين (آجل)
           </label>
         </div>
 
-        <div className="bg-white rounded-2xl shadow p-6">
-          <h2 className="text-lg font-bold text-gray-800 mb-4">المنتجات</h2>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
+          <h2 className="text-base font-bold text-gray-800 mb-4">المنتجات</h2>
           <div className="space-y-2">
             {products.map((p) => (
-              <div key={p.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-xl">
-                <span className="text-sm">{p.productName} ({p.color}/{p.size}) — متوفر: {p.quantity}</span>
-                <button onClick={() => addToCart(p)} disabled={p.quantity <= 0} className="px-4 h-9 bg-indigo-600 text-white rounded-lg text-sm font-bold disabled:opacity-40">
+              <div key={p.id} className="flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition-colors p-3.5 rounded-xl">
+                <span className="text-sm text-gray-700">{p.productName} <span className="text-gray-400">({p.color}/{p.size})</span> — متوفر: {p.quantity}</span>
+                <button onClick={() => addToCart(p)} disabled={p.quantity <= 0} className="px-4 h-9 bg-indigo-600 text-white rounded-lg text-sm font-bold disabled:opacity-40 hover:bg-indigo-700 shrink-0">
                   بيع
                 </button>
               </div>
@@ -143,20 +144,21 @@ export default function POSPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow p-6">
-          <h2 className="text-lg font-bold text-gray-800 mb-4">السلة</h2>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
+          <h2 className="text-base font-bold text-gray-800 mb-4">السلة</h2>
           {cart.map((i) => (
-            <div key={i.id} className="flex justify-between items-center py-2 border-b text-sm">
+            <div key={i.id} className="flex justify-between items-center py-2.5 border-b border-gray-100 text-sm">
               <span>{i.productName} × {i.qtyInCart}</span>
               <div className="flex items-center gap-3">
                 <span className="font-bold text-indigo-600">{(i.salePrice * i.qtyInCart).toLocaleString()} د.ع</span>
-                <button onClick={() => removeFromCart(i.id)} className="text-red-500"><Trash2 size={16} /></button>
+                <button onClick={() => removeFromCart(i.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button>
               </div>
             </div>
           ))}
-          <div className="flex justify-between items-center pt-4">
-            <span className="text-xl font-bold">الإجمالي: {total.toLocaleString()} د.ع</span>
-            <button onClick={completeSale} disabled={cart.length === 0} className="flex items-center gap-2 px-6 h-12 bg-green-600 text-white rounded-xl font-bold disabled:opacity-40">
+          {cart.length === 0 && <p className="text-gray-400 text-sm text-center py-4">السلة فارغة.</p>}
+          <div className="flex justify-between items-center pt-4 flex-wrap gap-3">
+            <span className="text-lg sm:text-xl font-bold text-gray-800">الإجمالي: {total.toLocaleString()} د.ع</span>
+            <button onClick={completeSale} disabled={cart.length === 0} className="flex items-center gap-2 px-6 h-12 bg-green-600 text-white rounded-xl font-bold disabled:opacity-40 hover:bg-green-700 shadow-md shadow-green-100">
               <CheckCircle size={20} /> إتمام البيع
             </button>
           </div>
