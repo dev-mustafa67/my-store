@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase-client';
 import { useUserRole } from '@/lib/permissions';
 import { useSubscription } from '@/lib/subscription';
+import { Package, Receipt, BookText, Users, BarChart3, CreditCard, Shield, LogOut, Shirt } from 'lucide-react';
 
 export default function NavBar() {
   const pathname = usePathname();
@@ -14,13 +15,13 @@ export default function NavBar() {
   const sub = useSubscription();
 
   const links = [
-    { href: '/products', label: '📦 المنتجات' },
-    { href: '/pos', label: '🧾 الكاشير' },
-    { href: '/debts', label: '📒 الديون' },
-    { href: '/customers', label: '👤 الزبائن' },
-    { href: '/analytics', label: '📊 التحليلات' },
-    ...(isOwner ? [{ href: '/billing', label: '💳 الاشتراك' }] : []),
-    ...(sub.isSuperAdmin ? [{ href: '/admin', label: '🛠️ إدارة المنصة' }] : []),
+    { href: '/products', label: 'المنتجات', icon: Package },
+    { href: '/pos', label: 'الكاشير', icon: Receipt },
+    { href: '/debts', label: 'الديون', icon: BookText },
+    { href: '/customers', label: 'الزبائن', icon: Users },
+    { href: '/analytics', label: 'التحليلات', icon: BarChart3 },
+    ...(isOwner ? [{ href: '/billing', label: 'الاشتراك', icon: CreditCard }] : []),
+    ...(sub.isSuperAdmin ? [{ href: '/admin', label: 'إدارة المنصة', icon: Shield }] : []),
   ];
 
   async function logout() {
@@ -37,23 +38,37 @@ export default function NavBar() {
 
   return (
     <>
-      <nav dir="rtl" className="bg-gray-900 text-white px-4 py-2 flex justify-between items-center flex-wrap gap-2">
-        <div className="flex gap-2 flex-wrap">
-          {links.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold ${
-                pathname === l.href ? 'bg-indigo-600' : 'text-gray-300 hover:bg-gray-800'
-              }`}
-            >
-              {l.label}
-            </Link>
-          ))}
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          {isOwner && <span className="bg-indigo-800 px-3 py-1 rounded-full text-xs font-bold">مالك</span>}
-          <button onClick={logout} className="text-gray-300 hover:text-white">تسجيل الخروج</button>
+      <nav dir="rtl" className="bg-gradient-to-l from-slate-900 to-indigo-950 text-white shadow-lg">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center flex-wrap gap-3">
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center">
+              <Shirt size={18} />
+            </div>
+            <span className="font-bold text-sm hidden sm:inline">إدارة المحل</span>
+          </div>
+
+          <div className="flex gap-1 flex-wrap">
+            {links.map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                  pathname === l.href ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-white/10'
+                }`}
+              >
+                <l.icon size={15} />
+                <span className="hidden sm:inline">{l.label}</span>
+              </Link>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {isOwner && <span className="bg-indigo-500/30 border border-indigo-400/40 px-2.5 py-1 rounded-full text-[11px] font-bold">مالك</span>}
+            <button onClick={logout} className="flex items-center gap-1 text-slate-300 hover:text-white text-xs">
+              <LogOut size={14} />
+              <span className="hidden sm:inline">خروج</span>
+            </button>
+          </div>
         </div>
       </nav>
       {showWarning && warningText && (
