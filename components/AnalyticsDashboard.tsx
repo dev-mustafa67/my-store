@@ -2,9 +2,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, Cell, CartesianGrid } from 'recharts';
 import { supabase } from '@/lib/supabase-client';
-import { Wallet, TrendingUp, Receipt, Sparkles, PackageX, RadarIcon, ArrowUp, ArrowDown } from 'lucide-react';
+import { Wallet, TrendingUp, Receipt, Sparkles, PackageX, ArrowUp, ArrowDown, Printer, LineChart as LineChartIcon } from 'lucide-react';
 
 const COLORS = ['#4f46e5', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4'];
 
@@ -18,23 +18,27 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
   const [current, setCurrent] = useState<Totals>({ revenue: 0, profit: 0, count: 0 });
   const [previous, setPrevious] = useState<Totals>({ revenue: 0, profit: 0, count: 0 });
   const [loading, setLoading] = useState(true);
+  const [chartWidth, setChartWidth] = useState(320);
 
-  useEffect(() => { loadAnalytics(); }, [storeId]);
+  useEffect(() => {
+    loadAnalytics();
+    const updateWidth = () => setChartWidth(Math.min(window.innerWidth - 80, 460));
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, [storeId]);
 
   function sumPeriod(rows: any[]): Totals {
     let revenue = 0, profit = 0;
     for (const s of rows) {
-      const lineRevenue = Number(s.sale_price_at_time) * Number(s.quantity_sold);
-      const lineProfit = (Number(s.sale_price_at_time) - Number(s.cost_price_at_time)) * Number(s.quantity_sold);
-      revenue += lineRevenue;
-      profit += lineProfit;
+      revenue += Number(s.sale_price_at_time) * Number(s.quantity_sold);
+      profit += (Number(s.sale_price_at_time) - Number(s.cost_price_at_time)) * Number(s.quantity_sold);
     }
     return { revenue, profit, count: rows.length };
   }
 
   async function loadAnalytics() {
     setLoading(true);
-
     const now = new Date();
     const thirtyDaysAgo = new Date(now); thirtyDaysAgo.setDate(now.getDate() - 30);
     const sixtyDaysAgo = new Date(now); sixtyDaysAgo.setDate(now.getDate() - 60);
@@ -57,7 +61,6 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
 
     const byProduct: Record<string, number> = {};
     const byDay: Record<string, number> = {};
-
     for (const s of currentRows ?? []) {
       const name = (s as any).product_variants?.products?.name ?? 'غير معروف';
       const profit = (Number(s.sale_price_at_time) - Number(s.cost_price_at_time)) * Number(s.quantity_sold);
@@ -65,11 +68,7 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
       const day = new Date(s.sold_at).toLocaleDateString('ar-IQ', { day: 'numeric', month: 'short' });
       byDay[day] = (byDay[day] ?? 0) + profit;
     }
-
-    setTopSellers(
-      Object.entries(byProduct).map(([name, profit]) => ({ name, profit }))
-        .sort((a, b) => b.profit - a.profit).slice(0, 5)
-    );
+    setTopSellers(Object.entries(byProduct).map(([name, profit]) => ({ name, profit })).sort((a, b) => b.profit - a.profit).slice(0, 5));
     setProfitTrend(Object.entries(byDay).map(([day, profit]) => ({ day, profit })));
 
     const ninetyDaysAgo = new Date(); ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
@@ -79,7 +78,6 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
       .or(`last_sold_at.lt.${ninetyDaysAgo.toISOString()},last_sold_at.is.null`)
       .gt('quantity', 0)
       .eq('products.store_id', storeId);
-
     setStagnantItems((stagnantRaw ?? []).map((v: any) => ({ name: v.products.name, color: v.color, size: v.size })));
 
     const fourteenDaysAgo = new Date(); fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
@@ -97,7 +95,6 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
       if (!soldByVariant[key]) soldByVariant[key] = { qty: variant.quantity, sold: 0, name: variant.products?.name ?? '—', color: variant.color, size: variant.size };
       soldByVariant[key].sold += s.quantity_sold;
     }
-
     const forecastRows = Object.values(soldByVariant)
       .map((v) => {
         const dailyRate = v.sold / 14;
@@ -106,7 +103,6 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
       })
       .filter((r) => Number.isFinite(r.daysLeft))
       .sort((a, b) => a.daysLeft - b.daysLeft);
-
     setForecast(forecastRows);
     setLoading(false);
   }
@@ -124,26 +120,25 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
   ];
 
   return (
-    <div dir="rtl" className="max-w-5xl mx-auto p-6 space-y-6">
+    <div dir="rtl" className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <RadarIcon className="text-indigo-600" size={26} />
-          <h2 className="text-2xl font-bold text-gray-800">لوحة التحليلات</h2>
+          <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white">
+            <LineChartIcon size={18} />
+          </div>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">لوحة التحليلات</h2>
         </div>
-        <button
-          onClick={() => window.print()}
-          className="print:hidden flex items-center gap-1.5 px-4 h-9 bg-gray-900 text-white rounded-lg text-xs font-bold"
-        >
-          🖨️ طباعة تقرير
+        <button onClick={() => window.print()} className="print:hidden flex items-center gap-1.5 px-3 sm:px-4 h-9 bg-gray-900 text-white rounded-lg text-xs font-bold">
+          <Printer size={14} /> <span className="hidden sm:inline">طباعة تقرير</span>
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         {statCards.map((c, i) => (
           <div key={i} className={`bg-gradient-to-br ${c.bg} rounded-2xl p-4 text-white shadow-lg`}>
             <c.icon size={20} className="opacity-90 mb-2" />
             <p className="text-xs opacity-90">{c.label}</p>
-            <p className="text-lg font-bold mt-0.5">{c.value}</p>
+            <p className="text-base sm:text-lg font-bold mt-0.5 break-words">{c.value}</p>
             {c.badge !== undefined && c.badge !== null && (
               <span className={`inline-flex items-center gap-0.5 text-[11px] mt-1 px-1.5 py-0.5 rounded-full ${c.badge >= 0 ? 'bg-white/25' : 'bg-black/20'}`}>
                 {c.badge >= 0 ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
@@ -155,42 +150,43 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl p-5 shadow">
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
           <h3 className="font-bold text-gray-700 mb-4">أعلى 5 قطع ربحاً (آخر 30 يوم)</h3>
           {topSellers.length === 0 ? (
-            <p className="text-gray-400 text-sm py-10 text-center">لا توجد مبيعات مسجّلة خلال آخر 30 يوماً بعد.</p>
+            <p className="text-gray-400 text-sm py-16 text-center">لا توجد مبيعات مسجّلة خلال آخر 30 يوماً بعد.</p>
           ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={topSellers} layout="vertical">
+            <div className="overflow-x-auto">
+              <BarChart width={chartWidth} height={220} data={topSellers} layout="vertical">
                 <XAxis type="number" hide />
-                <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12 }} />
+                <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11 }} />
                 <Tooltip formatter={(v: number) => `${v.toLocaleString()} د.ع`} />
                 <Bar dataKey="profit" radius={[0, 8, 8, 0]}>
                   {topSellers.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Bar>
               </BarChart>
-            </ResponsiveContainer>
+            </div>
           )}
         </div>
 
-        <div className="bg-white rounded-2xl p-5 shadow">
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
           <h3 className="font-bold text-gray-700 mb-4">اتجاه الربح اليومي</h3>
           {profitTrend.length === 0 ? (
-            <p className="text-gray-400 text-sm py-10 text-center">لا توجد مبيعات مسجّلة خلال آخر 30 يوماً بعد.</p>
+            <p className="text-gray-400 text-sm py-16 text-center">لا توجد مبيعات مسجّلة خلال آخر 30 يوماً بعد.</p>
           ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={profitTrend}>
-                <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
+            <div className="overflow-x-auto">
+              <LineChart width={chartWidth} height={220} data={profitTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f4" />
+                <XAxis dataKey="day" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip formatter={(v: number) => `${v.toLocaleString()} د.ع`} />
-                <Line type="monotone" dataKey="profit" stroke="#4f46e5" strokeWidth={3} dot={false} />
+                <Line type="monotone" dataKey="profit" stroke="#4f46e5" strokeWidth={3} dot={{ r: 3 }} />
               </LineChart>
-            </ResponsiveContainer>
+            </div>
           )}
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl p-5 shadow">
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
         <div className="flex items-center gap-2 mb-3">
           <PackageX size={18} className="text-amber-600" />
           <h3 className="font-bold text-gray-800">{stagnantItems.length} قطعة راكدة</h3>
@@ -208,7 +204,7 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
         )}
       </div>
 
-      <div className="bg-white rounded-2xl p-5 shadow">
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
         <h3 className="font-bold text-gray-700 mb-4">🔮 توصيات إعادة الطلب (آخر 14 يوماً)</h3>
         <div className="space-y-2">
           {forecast.map((r, i) => (
