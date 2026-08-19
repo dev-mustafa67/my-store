@@ -4,34 +4,61 @@
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts';
 import { supabase } from '@/lib/supabase-client';
+import { Wallet, TrendingUp, Receipt, Sparkles, PackageX, RadarIcon, ArrowUp, ArrowDown } from 'lucide-react';
 
 const COLORS = ['#4f46e5', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4'];
+
+type Totals = { revenue: number; profit: number; count: number };
 
 export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
   const [topSellers, setTopSellers] = useState<{ name: string; profit: number }[]>([]);
   const [stagnantItems, setStagnantItems] = useState<{ name: string; color: string; size: string }[]>([]);
   const [profitTrend, setProfitTrend] = useState<{ day: string; profit: number }[]>([]);
   const [forecast, setForecast] = useState<{ name: string; color: string; size: string; weeklyRate: number; daysLeft: number }[]>([]);
+  const [current, setCurrent] = useState<Totals>({ revenue: 0, profit: 0, count: 0 });
+  const [previous, setPrevious] = useState<Totals>({ revenue: 0, profit: 0, count: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { loadAnalytics(); }, [storeId]);
 
+  function sumPeriod(rows: any[]): Totals {
+    let revenue = 0, profit = 0;
+    for (const s of rows) {
+      const lineRevenue = Number(s.sale_price_at_time) * Number(s.quantity_sold);
+      const lineProfit = (Number(s.sale_price_at_time) - Number(s.cost_price_at_time)) * Number(s.quantity_sold);
+      revenue += lineRevenue;
+      profit += lineProfit;
+    }
+    return { revenue, profit, count: rows.length };
+  }
+
   async function loadAnalytics() {
     setLoading(true);
 
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now); thirtyDaysAgo.setDate(now.getDate() - 30);
+    const sixtyDaysAgo = new Date(now); sixtyDaysAgo.setDate(now.getDate() - 60);
 
-    const { data: sales } = await supabase
+    const { data: currentRows } = await supabase
       .from('sales')
       .select('sale_price_at_time, cost_price_at_time, quantity_sold, sold_at, product_variants(products(name))')
       .eq('store_id', storeId)
       .gte('sold_at', thirtyDaysAgo.toISOString());
 
+    const { data: previousRows } = await supabase
+      .from('sales')
+      .select('sale_price_at_time, cost_price_at_time, quantity_sold')
+      .eq('store_id', storeId)
+      .gte('sold_at', sixtyDaysAgo.toISOString())
+      .lt('sold_at', thirtyDaysAgo.toISOString());
+
+    setCurrent(sumPeriod(currentRows ?? []));
+    setPrevious(sumPeriod(previousRows ?? []));
+
     const byProduct: Record<string, number> = {};
     const byDay: Record<string, number> = {};
 
-    for (const s of sales ?? []) {
+    for (const s of currentRows ?? []) {
       const name = (s as any).product_variants?.products?.name ?? 'غير معروف';
       const profit = (Number(s.sale_price_at_time) - Number(s.cost_price_at_time)) * Number(s.quantity_sold);
       byProduct[name] = (byProduct[name] ?? 0) + profit;
@@ -45,10 +72,7 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
     );
     setProfitTrend(Object.entries(byDay).map(([day, profit]) => ({ day, profit })));
 
-    // راكدة = لها كمية متبقية، ولم تُبع أبداً أو لم تُبع منذ 90 يوماً — بالاعتماد على last_sold_at الحقيقي لكل قطعة
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-
+    const ninetyDaysAgo = new Date(); ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
     const { data: stagnantRaw } = await supabase
       .from('product_variants')
       .select('color, size, quantity, last_sold_at, products(name, store_id)')
@@ -56,14 +80,9 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
       .gt('quantity', 0)
       .eq('products.store_id', storeId);
 
-    setStagnantItems(
-      (stagnantRaw ?? []).map((v: any) => ({ name: v.products.name, color: v.color, size: v.size }))
-    );
+    setStagnantItems((stagnantRaw ?? []).map((v: any) => ({ name: v.products.name, color: v.color, size: v.size })));
 
-    // ---- توصيات إعادة الطلب: معدّل البيع خلال آخر 14 يوماً لكل قطعة ----
-    const fourteenDaysAgo = new Date();
-    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-
+    const fourteenDaysAgo = new Date(); fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
     const { data: recentSalesForForecast } = await supabase
       .from('sales')
       .select('variant_id, quantity_sold, product_variants(quantity, color, size, products(name))')
@@ -75,9 +94,7 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
       const variant: any = (s as any).product_variants;
       if (!variant) continue;
       const key = (s as any).variant_id;
-      if (!soldByVariant[key]) {
-        soldByVariant[key] = { qty: variant.quantity, sold: 0, name: variant.products?.name ?? '—', color: variant.color, size: variant.size };
-      }
+      if (!soldByVariant[key]) soldByVariant[key] = { qty: variant.quantity, sold: 0, name: variant.products?.name ?? '—', color: variant.color, size: variant.size };
       soldByVariant[key].sold += s.quantity_sold;
     }
 
@@ -96,9 +113,46 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
 
   if (loading) return <p className="text-center py-10 text-gray-500">جاري تحميل التحليلات...</p>;
 
+  const profitChangePct = previous.profit !== 0 ? ((current.profit - previous.profit) / Math.abs(previous.profit)) * 100 : null;
+  const avgSale = current.count > 0 ? current.revenue / current.count : 0;
+
+  const statCards = [
+    { label: 'الإيرادات (30 يوم)', value: `${current.revenue.toLocaleString()} د.ع`, icon: Wallet, bg: 'from-indigo-500 to-indigo-600' },
+    { label: 'صافي الربح (30 يوم)', value: `${current.profit.toLocaleString()} د.ع`, icon: TrendingUp, bg: 'from-emerald-500 to-emerald-600', badge: profitChangePct },
+    { label: 'عدد العمليات', value: current.count.toLocaleString(), icon: Receipt, bg: 'from-amber-500 to-amber-600' },
+    { label: 'متوسط قيمة البيعة', value: `${Math.round(avgSale).toLocaleString()} د.ع`, icon: Sparkles, bg: 'from-fuchsia-500 to-fuchsia-600' },
+  ];
+
   return (
     <div dir="rtl" className="max-w-5xl mx-auto p-6 space-y-6">
-      <h2 className="text-2xl font-bold text-gray-800">لوحة التحليلات</h2>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <RadarIcon className="text-indigo-600" size={26} />
+          <h2 className="text-2xl font-bold text-gray-800">لوحة التحليلات</h2>
+        </div>
+        <button
+          onClick={() => window.print()}
+          className="print:hidden flex items-center gap-1.5 px-4 h-9 bg-gray-900 text-white rounded-lg text-xs font-bold"
+        >
+          🖨️ طباعة تقرير
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {statCards.map((c, i) => (
+          <div key={i} className={`bg-gradient-to-br ${c.bg} rounded-2xl p-4 text-white shadow-lg`}>
+            <c.icon size={20} className="opacity-90 mb-2" />
+            <p className="text-xs opacity-90">{c.label}</p>
+            <p className="text-lg font-bold mt-0.5">{c.value}</p>
+            {c.badge !== undefined && c.badge !== null && (
+              <span className={`inline-flex items-center gap-0.5 text-[11px] mt-1 px-1.5 py-0.5 rounded-full ${c.badge >= 0 ? 'bg-white/25' : 'bg-black/20'}`}>
+                {c.badge >= 0 ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
+                {Math.abs(Math.round(c.badge))}% عن الشهر الماضي
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl p-5 shadow">
@@ -136,13 +190,22 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
         </div>
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-        <p className="font-bold text-amber-800 mb-1">لديك {stagnantItems.length} قطعة راكدة</p>
-        <p className="text-sm text-amber-700">
-          {stagnantItems.length
-            ? stagnantItems.map((i) => `${i.name} (${i.color}/${i.size})`).join('، ')
-            : 'لا توجد قطع راكدة حالياً'}
-        </p>
+      <div className="bg-white rounded-2xl p-5 shadow">
+        <div className="flex items-center gap-2 mb-3">
+          <PackageX size={18} className="text-amber-600" />
+          <h3 className="font-bold text-gray-800">{stagnantItems.length} قطعة راكدة</h3>
+        </div>
+        {stagnantItems.length === 0 ? (
+          <p className="text-gray-400 text-sm">لا توجد قطع راكدة حالياً 🎉</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {stagnantItems.map((i, idx) => (
+              <span key={idx} className="bg-amber-50 text-amber-800 text-xs font-semibold px-3 py-1.5 rounded-full">
+                {i.name} ({i.color}/{i.size})
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-2xl p-5 shadow">
