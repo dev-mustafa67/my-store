@@ -73,11 +73,16 @@ function SignupForm() {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen flex items-center justify-center p-6">
-      <form onSubmit={handleSignup} className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm space-y-4">
-        <h1 className="text-xl font-bold text-gray-800 text-center">
-          {isEmployeeInvite ? 'إنشاء حساب موظف' : 'إنشاء حساب مالك محل جديد'}
-        </h1>
+    <div dir="rtl" className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
+      <form onSubmit={handleSignup} className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm space-y-4">
+        <div className="text-center">
+          <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center mx-auto mb-3 shadow-lg shadow-indigo-200 text-2xl">
+            🧵
+          </div>
+          <h1 className="text-xl font-bold text-gray-800">
+            {isEmployeeInvite ? 'إنشاء حساب موظف' : 'إنشاء حساب مالك محل جديد'}
+          </h1>
+        </div>
         {isEmployeeInvite && (
           <p className="text-xs text-center text-indigo-600 bg-indigo-50 rounded-lg py-2">
             سينضم حسابك تلقائياً إلى المحل الذي أرسل لك هذا الرابط
@@ -87,27 +92,27 @@ function SignupForm() {
         <div>
           <label className="block text-sm text-gray-600 mb-1">الاسم الكامل</label>
           <input required value={fullName} onChange={(e) => setFullName(e.target.value)}
-            className="w-full h-12 px-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500" />
+            className="w-full h-12 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" />
         </div>
 
         {!isEmployeeInvite && (
           <div>
             <label className="block text-sm text-gray-600 mb-1">اسم المحل</label>
             <input required value={storeName} onChange={(e) => setStoreName(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500" />
+              className="w-full h-12 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" />
           </div>
         )}
 
         <div>
           <label className="block text-sm text-gray-600 mb-1">البريد الإلكتروني</label>
           <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-            className="w-full h-12 px-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500" />
+            className="w-full h-12 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" />
         </div>
 
         <div>
           <label className="block text-sm text-gray-600 mb-1">كلمة المرور</label>
           <input required type="password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)}
-            className="w-full h-12 px-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500" />
+            className="w-full h-12 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" />
         </div>
 
         {alreadyRegistered && (
@@ -118,10 +123,10 @@ function SignupForm() {
             </a>
           </div>
         )}
-        {error && <p className="text-red-600 text-sm">{error}</p>}
+        {error && <p className="text-red-600 text-sm bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
         <button type="submit" disabled={loading}
-          className="w-full h-12 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50">
+          className="w-full h-12 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 shadow-lg shadow-indigo-200">
           {loading ? 'جاري الإنشاء...' : 'إنشاء الحساب'}
         </button>
 
