@@ -19,7 +19,7 @@ export default function AnalyticsPage() {
 
   return (
     <div dir="rtl">
-      <NavBar />
+      <div className="print:hidden"><NavBar /></div>
       {storeId ? <AnalyticsDashboard storeId={storeId} /> : <p className="text-center py-10">جاري التحميل...</p>}
     </div>
   );
