@@ -1,10 +1,9 @@
-// app/debts/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
 import NavBar from '@/components/NavBar';
 import { supabase } from '@/lib/supabase-client';
-import { BookText, Phone, CheckCircle2 } from 'lucide-react';
+import { BookText, Phone, CheckCircle2, MessageSquare, DollarSign } from 'lucide-react';
 
 export default function DebtsPage() {
   const [debts, setDebts] = useState<any[]>([]);
@@ -47,6 +46,35 @@ export default function DebtsPage() {
     load();
   }
 
+  // ميزة الدفع الجزئي
+  async function payPartial(debt: any) {
+    const payAmountStr = prompt(`المبلغ المتبقي: ${debt.amount} د.ع\nأدخل المبلغ المراد تسديده الآن:`);
+    if (!payAmountStr) return;
+    const payAmount = Number(payAmountStr);
+    if (isNaN(payAmount) || payAmount <= 0) return alert('يرجى إدخال مبلغ صحيح');
+
+    if (payAmount >= debt.amount) {
+      await markPaid(debt.id);
+    } else {
+      await supabase.from('debts').update({
+        amount: debt.amount - payAmount,
+        note: `${debt.note || ''} (تم تسديد دفعة: ${payAmount.toLocaleString()} د.ع)`
+      }).eq('id', debt.id);
+      load();
+    }
+  }
+
+  // ميزة تذكير الواتساب
+  function sendReminder(debt: any) {
+    if (!debt.customer_phone) {
+      alert('لا يوجد رقم هاتف مسجل لهذا الزبون');
+      return;
+    }
+    const cleanPhone = debt.customer_phone.replace(/[^0-9]/g, '');
+    const msg = `مرحباً أستاذ ${debt.customer_name}، نود تذكيركم بلطف بوجود مبلغ مستحق بذمتكم قدره ${Number(debt.amount).toLocaleString()} د.ع. شاكرين تعاونكم معنا! 🙏`;
+    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+  }
+
   const totalOutstanding = debts.filter(d => !d.paid).reduce((s, d) => s + Number(d.amount), 0);
 
   return (
@@ -63,26 +91,46 @@ export default function DebtsPage() {
           <h3 className="font-bold text-gray-700 text-sm">تسجيل دين جديد</h3>
           <div className="flex gap-3 flex-wrap">
             <input placeholder="اسم الزبون" value={customerName} onChange={e => setCustomerName(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 flex-1 min-w-[140px]" />
-            <input placeholder="رقم الهاتف" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 flex-1 min-w-[140px]" />
+            <input placeholder="رقم الهاتف (للواتساب)" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 flex-1 min-w-[140px]" />
             <input type="number" placeholder="المبلغ" value={amount} onChange={e => setAmount(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 flex-1 min-w-[100px]" />
           </div>
           <button className="w-full sm:w-auto px-6 h-11 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700">تسجيل الدين</button>
         </form>
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           {debts.map((d) => (
-            <div key={d.id} className={`flex justify-between items-center p-4 rounded-2xl text-sm shadow-sm border ${d.paid ? 'bg-green-50 border-green-100 opacity-70' : 'bg-white border-gray-100'}`}>
+            <div key={d.id} className={`flex flex-col sm:flex-row justify-between sm:items-center p-4 rounded-2xl text-sm shadow-sm border gap-3 ${d.paid ? 'bg-green-50 border-green-100 opacity-70' : 'bg-white border-gray-100'}`}>
               <div>
-                <p className="font-semibold text-gray-800">{d.customer_name}</p>
-                <p className="text-gray-500 text-xs mt-0.5 flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-gray-800">{d.customer_name}</p>
+                  {!d.paid && <span className="bg-red-50 text-red-600 text-[10px] px-2 py-0.5 rounded-full font-bold">مستحق</span>}
+                </div>
+                <p className="text-gray-500 text-xs mt-1 flex items-center gap-3 flex-wrap">
                   {d.customer_phone && <span className="flex items-center gap-1"><Phone size={11} /> {d.customer_phone}</span>}
                   <span>{d.note}</span>
-                  <span className="font-bold text-gray-700">{Number(d.amount).toLocaleString()} د.ع</span>
+                  <span className="font-bold text-red-600">{Number(d.amount).toLocaleString()} د.ع</span>
                 </p>
               </div>
-              {d.paid
-                ? <span className="flex items-center gap-1 text-green-700 text-xs font-bold"><CheckCircle2 size={14} /> تم الاستلام</span>
-                : <button onClick={() => markPaid(d.id)} className="px-4 h-8 bg-green-600 text-white rounded-lg text-xs font-bold shrink-0">تحصيل</button>}
+
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                {!d.paid && d.customer_phone && (
+                  <button onClick={() => sendReminder(d)} title="تذكير واتساب" className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg">
+                    <MessageSquare size={16} />
+                  </button>
+                )}
+                {!d.paid && (
+                  <button onClick={() => payPartial(d)} title="دفعة جزئية" className="flex items-center gap-1 px-3 h-8 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600">
+                    <DollarSign size={13} /> تسديد جزئي
+                  </button>
+                )}
+                {d.paid ? (
+                  <span className="flex items-center gap-1 text-green-700 text-xs font-bold"><CheckCircle2 size={14} /> مسدد بالكامل</span>
+                ) : (
+                  <button onClick={() => markPaid(d.id)} className="px-3.5 h-8 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700">
+                    إغلاق الدين
+                  </button>
+                )}
+              </div>
             </div>
           ))}
           {debts.length === 0 && <p className="text-gray-400 text-sm text-center py-6">لا توجد ديون مسجّلة.</p>}
