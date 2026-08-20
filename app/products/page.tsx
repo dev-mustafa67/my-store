@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import NavBar from '@/components/NavBar';
 import { supabase } from '@/lib/supabase-client';
 import { useUserRole } from '@/lib/permissions';
-import { Save, Send, Package, ShirtIcon, AlertTriangle, Plus, Minus, Printer } from 'lucide-react';
+import { Save, Send, Package, ShirtIcon, AlertTriangle, Plus, Minus, Printer, Barcode } from 'lucide-react';
 
 export default function ProductsPage() {
   const { isOwner, loading: roleLoading } = useUserRole();
@@ -17,6 +17,7 @@ export default function ProductsPage() {
   const [cost, setCost] = useState('');
   const [price, setPrice] = useState('');
   const [qty, setQty] = useState('');
+  const [barcode, setBarcode] = useState('');
   const [saving, setSaving] = useState(false);
   const [filterLowStock, setFilterLowStock] = useState(false);
 
@@ -50,14 +51,22 @@ export default function ProductsPage() {
 
     await supabase.from('product_variants').insert({
       product_id: product!.id,
-      color, size,
+      color, 
+      size,
       cost_price: Number(cost),
       sale_price: Number(price),
       quantity: Number(qty),
-      barcode: crypto.randomUUID().slice(0, 8),
+      barcode: barcode.trim() || crypto.randomUUID().slice(0, 8),
     });
 
-    setName(''); setCategory(''); setColor(''); setSize(''); setCost(''); setPrice(''); setQty('');
+    setName(''); 
+    setCategory(''); 
+    setColor(''); 
+    setSize(''); 
+    setCost(''); 
+    setPrice(''); 
+    setQty('');
+    setBarcode('');
     setSaving(false);
     loadProducts();
   }
@@ -112,30 +121,43 @@ export default function ProductsPage() {
 
         {isOwner && (
           <form onSubmit={handleAdd} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 space-y-4">
-            <h2 className="text-base font-bold text-gray-800 flex items-center gap-2"><Package size={18} className="text-indigo-600" /> إضافة منتج جديد</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <input required placeholder="اسم القطعة" value={name} onChange={e => setName(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 outline-none" />
-              <input placeholder="التصنيف" value={category} onChange={e => setCategory(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 outline-none" />
-              <input placeholder="اللون" value={color} onChange={e => setColor(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 outline-none" />
-              <input placeholder="المقاس" value={size} onChange={e => setSize(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 outline-none" />
-              <input required type="number" placeholder="سعر الشراء" value={cost} onChange={e => setCost(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 outline-none" />
-              <input required type="number" placeholder="سعر البيع" value={price} onChange={e => setPrice(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 outline-none" />
-              <input required type="number" placeholder="الكمية" value={qty} onChange={e => setQty(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 outline-none" />
+            <h2 className="text-base font-bold text-gray-800 flex items-center gap-2">
+              <Package size={18} className="text-indigo-600" /> إضافة منتج جديد
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <input required placeholder="اسم القطعة *" value={name} onChange={e => setName(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+              <input placeholder="التصنيف" value={category} onChange={e => setCategory(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+              <input placeholder="اللون" value={color} onChange={e => setColor(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+              <input placeholder="المقاس" value={size} onChange={e => setSize(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+              <input required type="number" placeholder="سعر الشراء *" value={cost} onChange={e => setCost(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+              <input required type="number" placeholder="سعر البيع *" value={price} onChange={e => setPrice(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+              <input required type="number" placeholder="الكمية *" value={qty} onChange={e => setQty(e.target.value)} className="h-11 px-3 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+              <div className="relative">
+                <input 
+                  placeholder="الباركود (اختياري)" 
+                  value={barcode} 
+                  onChange={e => setBarcode(e.target.value)} 
+                  className="w-full h-11 pr-8 pl-2 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-500 text-sm" 
+                />
+                <Barcode size={16} className="absolute right-2.5 top-3.5 text-gray-400" />
+              </div>
             </div>
-            <button disabled={saving} className="flex items-center gap-2 px-6 h-11 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700">
+            <button disabled={saving} className="flex items-center gap-2 px-6 h-11 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-md">
               <Save size={18} /> {saving ? 'جاري الحفظ...' : 'حفظ المنتج'}
             </button>
           </form>
         )}
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
-          <h2 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2"><ShirtIcon size={18} className="text-indigo-600" /> المخزون وجدول الجرد</h2>
+          <h2 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <ShirtIcon size={18} className="text-indigo-600" /> المخزون وجدول الجرد
+          </h2>
           <div className="space-y-2">
             {displayedVariants.map((v) => (
               <div key={v.id} className="flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition-colors p-3.5 rounded-xl text-sm flex-wrap gap-2">
                 <div>
                   <p className="font-bold text-gray-800">{v.products?.name} <span className="text-gray-400 font-normal">({v.color}/{v.size})</span></p>
-                  <p className="text-xs text-gray-500">الباركود: {v.barcode || '—'} | السعر: {v.sale_price?.toLocaleString()} د.ع</p>
+                  <p className="text-xs text-gray-500">الباركود: <span className="font-mono font-semibold text-indigo-700">{v.barcode || '—'}</span> | السعر: {v.sale_price?.toLocaleString()} د.ع</p>
                 </div>
                 
                 <div className="flex items-center gap-3">
