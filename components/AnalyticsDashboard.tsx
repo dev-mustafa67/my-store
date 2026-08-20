@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, Cell, CartesianGrid } from 'recharts';
 import { supabase } from '@/lib/supabase-client';
-import { Wallet, TrendingUp, Receipt, Sparkles, PackageX, ArrowUp, ArrowDown, Printer, LineChart as LineChartIcon, Landmark } from 'lucide-react';
+import { Wallet, TrendingUp, Receipt, Sparkles, PackageX, ArrowUp, ArrowDown, Printer, LineChart as LineChartIcon, Landmark, HandCoins } from 'lucide-react';
 
 const COLORS = ['#4f46e5', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4'];
 
@@ -16,10 +16,12 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
   const [forecast, setForecast] = useState<{ name: string; color: string; size: string; weeklyRate: number; daysLeft: number }[]>([]);
   const [current, setCurrent] = useState<Totals>({ revenue: 0, profit: 0, count: 0 });
   const [previous, setPrevious] = useState<Totals>({ revenue: 0, profit: 0, count: 0 });
-  const [todaySummary, setTodaySummary] = useState({ cashRevenue: 0, creditRevenue: 0, count: 0, profit: 0 });
+  const [todaySummary, setTodaySummary] = useState({ cashSales: 0, creditSales: 0, collectedDebtsToday: 0, totalCashInDrawer: 0, count: 0, profit: 0 });
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     if (storeId) loadAnalytics();
   }, [storeId]);
 
@@ -40,25 +42,42 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
       const sixtyDaysAgo = new Date(now); sixtyDaysAgo.setDate(now.getDate() - 60);
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
-      // جلب مبيعات اليوم لإغلاق الصندوق
-      const { data: todayRows } = await supabase
+      // 1. مبيعات اليوم
+      const { data: todaySales } = await supabase
         .from('sales')
         .select('*')
         .eq('store_id', storeId)
         .gte('sold_at', startOfToday);
 
-      if (todayRows) {
-        let cash = 0, credit = 0, todayProfit = 0;
-        todayRows.forEach((r) => {
-          const val = Number(r.sale_price_at_time) * Number(r.quantity_sold);
-          const prf = (Number(r.sale_price_at_time) - Number(r.cost_price_at_time)) * Number(r.quantity_sold);
-          if (r.on_credit) credit += val;
-          else cash += val;
-          todayProfit += prf;
-        });
-        setTodaySummary({ cashRevenue: cash, creditRevenue: credit, count: todayRows.length, profit: todayProfit });
-      }
+      // 2. الديون المحصلة اليوم
+      const { data: todayPaidDebts } = await supabase
+        .from('debts')
+        .select('amount, paid_at')
+        .eq('store_id', storeId)
+        .eq('paid', true)
+        .gte('paid_at', startOfToday);
 
+      let cashSales = 0, creditSales = 0, todayProfit = 0;
+      todaySales?.forEach((r) => {
+        const val = Number(r.sale_price_at_time) * Number(r.quantity_sold);
+        const prf = (Number(r.sale_price_at_time) - Number(r.cost_price_at_time)) * Number(r.quantity_sold);
+        if (r.on_credit) creditSales += val;
+        else cashSales += val;
+        todayProfit += prf;
+      });
+
+      const collectedDebts = todayPaidDebts?.reduce((sum, d) => sum + Number(d.amount), 0) || 0;
+
+      setTodaySummary({
+        cashSales,
+        creditSales,
+        collectedDebtsToday: collectedDebts,
+        totalCashInDrawer: cashSales + collectedDebts,
+        count: todaySales?.length || 0,
+        profit: todayProfit,
+      });
+
+      // 3. المبيعات السابقة
       const { data: currentRows } = await supabase
         .from('sales')
         .select('sale_price_at_time, cost_price_at_time, quantity_sold, sold_at, product_variants(products(name))')
@@ -127,13 +146,13 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
     }
   }
 
-  if (loading) return <p className="text-center py-10 text-gray-500 font-medium">جاري تحميل التحليلات...</p>;
+  if (loading || !mounted) return <p className="text-center py-10 text-gray-500 font-medium">جاري تحميل التحليلات...</p>;
 
   const profitChangePct = previous.profit !== 0 ? ((current.profit - previous.profit) / Math.abs(previous.profit)) * 100 : null;
   const avgSale = current.count > 0 ? current.revenue / current.count : 0;
 
   const statCards = [
-    { label: 'الإيرادات (30 يوم)', value: `${current.revenue.toLocaleString()} د.ع`, icon: Wallet, bg: 'from-indigo-500 to-indigo-600' },
+    { label: 'إجمالي المبيعات (30 يوم)', value: `${current.revenue.toLocaleString()} د.ع`, icon: Wallet, bg: 'from-indigo-500 to-indigo-600' },
     { label: 'صافي الربح (30 يوم)', value: `${current.profit.toLocaleString()} د.ع`, icon: TrendingUp, bg: 'from-emerald-500 to-emerald-600', badge: profitChangePct },
     { label: 'عدد العمليات', value: current.count.toLocaleString(), icon: Receipt, bg: 'from-amber-500 to-amber-600' },
     { label: 'متوسط قيمة البيعة', value: `${Math.round(avgSale).toLocaleString()} د.ع`, icon: Sparkles, bg: 'from-fuchsia-500 to-fuchsia-600' },
@@ -153,37 +172,39 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
         </button>
       </div>
 
-      {/* تقرير إغلاق الصندوق اليومي (End-of-Day) */}
+      {/* صندوق إغلاق الصندوق اليومي المحدث */}
       <div className="bg-slate-900 text-white rounded-2xl p-5 shadow-xl border border-slate-800 space-y-3">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2">
             <Landmark size={20} className="text-emerald-400" />
-            <h3 className="font-bold text-sm sm:text-base">إغلاق الصندوق اليومي (اليوم)</h3>
+            <h3 className="font-bold text-sm sm:text-base">إغلاق الصندوق اليومي</h3>
           </div>
           <span className="text-xs bg-slate-800 px-3 py-1 rounded-full text-slate-300 font-mono">
             {new Date().toLocaleDateString('ar-IQ')}
           </span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-          <div className="bg-slate-800/60 p-3 rounded-xl">
-            <p className="text-xs text-slate-400">النقد الفعلي في الدرج</p>
-            <p className="text-lg font-bold text-emerald-400 mt-0.5">{todaySummary.cashRevenue.toLocaleString()} د.ع</p>
+          <div className="bg-slate-800/80 p-3 rounded-xl border border-emerald-500/30">
+            <p className="text-xs text-emerald-400 font-medium">الكاش الفعلي في الدرج</p>
+            <p className="text-lg font-bold text-white mt-0.5">{todaySummary.totalCashInDrawer.toLocaleString()} د.ع</p>
+            <p className="text-[10px] text-slate-400 mt-1">(مبيعات كاش: {todaySummary.cashSales.toLocaleString()} + ديون مستلمة: {todaySummary.collectedDebtsToday.toLocaleString()})</p>
           </div>
-          <div className="bg-slate-800/60 p-3 rounded-xl">
-            <p className="text-xs text-slate-400">مبيعات آجلة (ديون اليوم)</p>
-            <p className="text-lg font-bold text-rose-400 mt-0.5">{todaySummary.creditRevenue.toLocaleString()} د.ع</p>
+          <div className="bg-slate-800/80 p-3 rounded-xl border border-amber-500/30">
+            <p className="text-xs text-amber-400 font-medium">ديون مسجلة اليوم (آجل)</p>
+            <p className="text-lg font-bold text-white mt-0.5">{todaySummary.creditSales.toLocaleString()} د.ع</p>
           </div>
-          <div className="bg-slate-800/60 p-3 rounded-xl">
+          <div className="bg-slate-800/80 p-3 rounded-xl">
             <p className="text-xs text-slate-400">عمليات اليوم</p>
             <p className="text-lg font-bold text-white mt-0.5">{todaySummary.count}</p>
           </div>
-          <div className="bg-slate-800/60 p-3 rounded-xl">
-            <p className="text-xs text-slate-400">أرباح اليوم التقديرية</p>
-            <p className="text-lg font-bold text-indigo-400 mt-0.5">{todaySummary.profit.toLocaleString()} د.ع</p>
+          <div className="bg-slate-800/80 p-3 rounded-xl border border-indigo-500/30">
+            <p className="text-xs text-indigo-400 font-medium">أرباح مبيعات اليوم</p>
+            <p className="text-lg font-bold text-white mt-0.5">{todaySummary.profit.toLocaleString()} د.ع</p>
           </div>
         </div>
       </div>
 
+      {/* بطاقات الإحصائيات العامة */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         {statCards.map((c, i) => (
           <div key={i} className={`bg-gradient-to-br ${c.bg} rounded-2xl p-4 text-white shadow-lg`}>
@@ -200,17 +221,18 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
         ))}
       </div>
 
+      {/* قسم الرسوم البيانية مع حل مشكلة العرض min-w-0 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 min-w-0">
           <h3 className="font-bold text-gray-700 mb-4">أعلى 5 قطع ربحاً (آخر 30 يوم)</h3>
           {topSellers.length === 0 ? (
             <p className="text-gray-400 text-sm py-16 text-center">لا توجد مبيعات مسجّلة بعد.</p>
           ) : (
-            <div className="h-64 w-full">
+            <div className="w-full h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topSellers} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                <BarChart data={topSellers} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                   <XAxis type="number" hide />
-                  <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11 }} />
                   <Tooltip formatter={(v: any) => [`${Number(v || 0).toLocaleString()} د.ع`, 'الربح']} />
                   <Bar dataKey="profit" radius={[0, 8, 8, 0]}>
                     {topSellers.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
@@ -221,12 +243,12 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
           )}
         </div>
 
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 min-w-0">
           <h3 className="font-bold text-gray-700 mb-4">اتجاه الربح اليومي</h3>
           {profitTrend.length === 0 ? (
             <p className="text-gray-400 text-sm py-16 text-center">لا توجد مبيعات مسجّلة بعد.</p>
           ) : (
-            <div className="h-64 w-full">
+            <div className="w-full h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={profitTrend} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f4" />
