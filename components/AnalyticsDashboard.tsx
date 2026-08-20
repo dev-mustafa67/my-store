@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, Cell, CartesianGrid } from 'recharts';
 import { supabase } from '@/lib/supabase-client';
-import { Wallet, TrendingUp, Receipt, Sparkles, PackageX, ArrowUp, ArrowDown, Printer, LineChart as LineChartIcon } from 'lucide-react';
+import { Wallet, TrendingUp, Receipt, Sparkles, PackageX, ArrowUp, ArrowDown, Printer, LineChart as LineChartIcon, Landmark } from 'lucide-react';
 
 const COLORS = ['#4f46e5', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4'];
 
@@ -16,12 +16,11 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
   const [forecast, setForecast] = useState<{ name: string; color: string; size: string; weeklyRate: number; daysLeft: number }[]>([]);
   const [current, setCurrent] = useState<Totals>({ revenue: 0, profit: 0, count: 0 });
   const [previous, setPrevious] = useState<Totals>({ revenue: 0, profit: 0, count: 0 });
+  const [todaySummary, setTodaySummary] = useState({ cashRevenue: 0, creditRevenue: 0, count: 0, profit: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (storeId) {
-      loadAnalytics();
-    }
+    if (storeId) loadAnalytics();
   }, [storeId]);
 
   function sumPeriod(rows: any[]): Totals {
@@ -39,6 +38,26 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
       const now = new Date();
       const thirtyDaysAgo = new Date(now); thirtyDaysAgo.setDate(now.getDate() - 30);
       const sixtyDaysAgo = new Date(now); sixtyDaysAgo.setDate(now.getDate() - 60);
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+
+      // جلب مبيعات اليوم لإغلاق الصندوق
+      const { data: todayRows } = await supabase
+        .from('sales')
+        .select('*')
+        .eq('store_id', storeId)
+        .gte('sold_at', startOfToday);
+
+      if (todayRows) {
+        let cash = 0, credit = 0, todayProfit = 0;
+        todayRows.forEach((r) => {
+          const val = Number(r.sale_price_at_time) * Number(r.quantity_sold);
+          const prf = (Number(r.sale_price_at_time) - Number(r.cost_price_at_time)) * Number(r.quantity_sold);
+          if (r.on_credit) credit += val;
+          else cash += val;
+          todayProfit += prf;
+        });
+        setTodaySummary({ cashRevenue: cash, creditRevenue: credit, count: todayRows.length, profit: todayProfit });
+      }
 
       const { data: currentRows } = await supabase
         .from('sales')
@@ -102,7 +121,7 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
         .sort((a, b) => a.daysLeft - b.daysLeft);
       setForecast(forecastRows);
     } catch (err) {
-      console.error('Error loading analytics:', err);
+      console.error('Analytics load error:', err);
     } finally {
       setLoading(false);
     }
@@ -129,9 +148,40 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
           </div>
           <h2 className="text-xl sm:text-2xl font-bold text-gray-800">لوحة التحليلات</h2>
         </div>
-        <button onClick={() => window.print()} className="print:hidden flex items-center gap-1.5 px-3 sm:px-4 h-9 bg-gray-900 text-white rounded-lg text-xs font-bold hover:bg-gray-800 transition">
-          <Printer size={14} /> <span className="hidden sm:inline">طباعة تقرير</span>
+        <button onClick={() => window.print()} className="print:hidden flex items-center gap-1.5 px-3 sm:px-4 h-9 bg-gray-900 text-white rounded-lg text-xs font-bold hover:bg-gray-800">
+          <Printer size={14} /> <span className="hidden sm:inline">طباعة تقرير شامل</span>
         </button>
+      </div>
+
+      {/* تقرير إغلاق الصندوق اليومي (End-of-Day) */}
+      <div className="bg-slate-900 text-white rounded-2xl p-5 shadow-xl border border-slate-800 space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <Landmark size={20} className="text-emerald-400" />
+            <h3 className="font-bold text-sm sm:text-base">إغلاق الصندوق اليومي (اليوم)</h3>
+          </div>
+          <span className="text-xs bg-slate-800 px-3 py-1 rounded-full text-slate-300 font-mono">
+            {new Date().toLocaleDateString('ar-IQ')}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+          <div className="bg-slate-800/60 p-3 rounded-xl">
+            <p className="text-xs text-slate-400">النقد الفعلي في الدرج</p>
+            <p className="text-lg font-bold text-emerald-400 mt-0.5">{todaySummary.cashRevenue.toLocaleString()} د.ع</p>
+          </div>
+          <div className="bg-slate-800/60 p-3 rounded-xl">
+            <p className="text-xs text-slate-400">مبيعات آجلة (ديون اليوم)</p>
+            <p className="text-lg font-bold text-rose-400 mt-0.5">{todaySummary.creditRevenue.toLocaleString()} د.ع</p>
+          </div>
+          <div className="bg-slate-800/60 p-3 rounded-xl">
+            <p className="text-xs text-slate-400">عمليات اليوم</p>
+            <p className="text-lg font-bold text-white mt-0.5">{todaySummary.count}</p>
+          </div>
+          <div className="bg-slate-800/60 p-3 rounded-xl">
+            <p className="text-xs text-slate-400">أرباح اليوم التقديرية</p>
+            <p className="text-lg font-bold text-indigo-400 mt-0.5">{todaySummary.profit.toLocaleString()} د.ع</p>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
@@ -151,11 +201,10 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* أعلى 5 قطع ربحاً */}
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
           <h3 className="font-bold text-gray-700 mb-4">أعلى 5 قطع ربحاً (آخر 30 يوم)</h3>
           {topSellers.length === 0 ? (
-            <p className="text-gray-400 text-sm py-16 text-center">لا توجد مبيعات مسجّلة خلال آخر 30 يوماً بعد.</p>
+            <p className="text-gray-400 text-sm py-16 text-center">لا توجد مبيعات مسجّلة بعد.</p>
           ) : (
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -172,11 +221,10 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
           )}
         </div>
 
-        {/* اتجاه الربح اليومي */}
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
           <h3 className="font-bold text-gray-700 mb-4">اتجاه الربح اليومي</h3>
           {profitTrend.length === 0 ? (
-            <p className="text-gray-400 text-sm py-16 text-center">لا توجد مبيعات مسجّلة خلال آخر 30 يوماً بعد.</p>
+            <p className="text-gray-400 text-sm py-16 text-center">لا توجد مبيعات مسجّلة بعد.</p>
           ) : (
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -193,7 +241,6 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
         </div>
       </div>
 
-      {/* القطع الراكدة */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
         <div className="flex items-center gap-2 mb-3">
           <PackageX size={18} className="text-amber-600" />
@@ -212,7 +259,6 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
         )}
       </div>
 
-      {/* توصيات إعادة الطلب */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
         <h3 className="font-bold text-gray-700 mb-4">🔮 توصيات إعادة الطلب (آخر 14 يوماً)</h3>
         <div className="space-y-2 max-h-60 overflow-y-auto">
