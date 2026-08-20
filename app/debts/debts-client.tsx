@@ -46,7 +46,7 @@ export default function DebtsPage() {
     load();
   }
 
-  // ميزة الدفع الجزئي
+  // تسديد جزء من الدين مع تسجيل تاريخ الدفع
   async function payPartial(debt: any) {
     const payAmountStr = prompt(`المبلغ المتبقي: ${debt.amount} د.ع\nأدخل المبلغ المراد تسديده الآن:`);
     if (!payAmountStr) return;
@@ -56,15 +56,27 @@ export default function DebtsPage() {
     if (payAmount >= debt.amount) {
       await markPaid(debt.id);
     } else {
+      // 1. تقليص الدين المتبقي
       await supabase.from('debts').update({
         amount: debt.amount - payAmount,
         note: `${debt.note || ''} (تم تسديد دفعة: ${payAmount.toLocaleString()} د.ع)`
       }).eq('id', debt.id);
+
+      // 2. تسجيل حركة استلام الدفعة في السجلات
+      await supabase.from('debts').insert({
+        store_id: debt.store_id,
+        customer_name: debt.customer_name,
+        customer_phone: debt.customer_phone,
+        amount: payAmount,
+        note: `دفعة مستلمة من دين سابق`,
+        paid: true,
+        paid_at: new Date().toISOString()
+      });
+
       load();
     }
   }
 
-  // ميزة تذكير الواتساب
   function sendReminder(debt: any) {
     if (!debt.customer_phone) {
       alert('لا يوجد رقم هاتف مسجل لهذا الزبون');
