@@ -1,27 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, Cell, CartesianGrid } from 'recharts';
 import { supabase } from '@/lib/supabase-client';
-import { Wallet, TrendingUp, Receipt, Sparkles, PackageX, ArrowUp, ArrowDown, Printer, LineChart as LineChartIcon, Landmark, HandCoins } from 'lucide-react';
-
-const COLORS = ['#4f46e5', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4'];
+import { Wallet, TrendingUp, Receipt, Sparkles, PackageX, ArrowUp, ArrowDown, Printer, LineChart as LineChartIcon, Landmark } from 'lucide-react';
 
 type Totals = { revenue: number; profit: number; count: number };
 
 export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
-  const [topSellers, setTopSellers] = useState<{ name: string; profit: number }[]>([]);
   const [stagnantItems, setStagnantItems] = useState<{ name: string; color: string; size: string }[]>([]);
-  const [profitTrend, setProfitTrend] = useState<{ day: string; profit: number }[]>([]);
   const [forecast, setForecast] = useState<{ name: string; color: string; size: string; weeklyRate: number; daysLeft: number }[]>([]);
   const [current, setCurrent] = useState<Totals>({ revenue: 0, profit: 0, count: 0 });
   const [previous, setPrevious] = useState<Totals>({ revenue: 0, profit: 0, count: 0 });
   const [todaySummary, setTodaySummary] = useState({ cashSales: 0, creditSales: 0, collectedDebtsToday: 0, totalCashInDrawer: 0, count: 0, profit: 0 });
   const [loading, setLoading] = useState(true);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     if (storeId) loadAnalytics();
   }, [storeId]);
 
@@ -77,10 +70,10 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
         profit: todayProfit,
       });
 
-      // 3. المبيعات السابقة
+      // 3. إحصائيات 30 يوم
       const { data: currentRows } = await supabase
         .from('sales')
-        .select('sale_price_at_time, cost_price_at_time, quantity_sold, sold_at, product_variants(products(name))')
+        .select('sale_price_at_time, cost_price_at_time, quantity_sold, sold_at')
         .eq('store_id', storeId)
         .gte('sold_at', thirtyDaysAgo.toISOString());
 
@@ -94,18 +87,7 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
       setCurrent(sumPeriod(currentRows ?? []));
       setPrevious(sumPeriod(previousRows ?? []));
 
-      const byProduct: Record<string, number> = {};
-      const byDay: Record<string, number> = {};
-      for (const s of currentRows ?? []) {
-        const name = (s as any).product_variants?.products?.name ?? 'غير معروف';
-        const profit = (Number(s.sale_price_at_time) - Number(s.cost_price_at_time)) * Number(s.quantity_sold);
-        byProduct[name] = (byProduct[name] ?? 0) + profit;
-        const day = new Date(s.sold_at).toLocaleDateString('ar-IQ', { day: 'numeric', month: 'short' });
-        byDay[day] = (byDay[day] ?? 0) + profit;
-      }
-      setTopSellers(Object.entries(byProduct).map(([name, profit]) => ({ name, profit })).sort((a, b) => b.profit - a.profit).slice(0, 5));
-      setProfitTrend(Object.entries(byDay).map(([day, profit]) => ({ day, profit })));
-
+      // 4. البضائع الراكدة
       const ninetyDaysAgo = new Date(); ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
       const { data: stagnantRaw } = await supabase
         .from('product_variants')
@@ -115,6 +97,7 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
         .eq('products.store_id', storeId);
       setStagnantItems((stagnantRaw ?? []).map((v: any) => ({ name: v.products?.name ?? 'قطعة', color: v.color, size: v.size })));
 
+      // 5. توصيات النواقص (14 يوم)
       const fourteenDaysAgo = new Date(); fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
       const { data: recentSalesForForecast } = await supabase
         .from('sales')
@@ -146,7 +129,7 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
     }
   }
 
-  if (loading || !mounted) return <p className="text-center py-10 text-gray-500 font-medium">جاري تحميل التحليلات...</p>;
+  if (loading) return <p className="text-center py-10 text-gray-500 font-medium">جاري تحميل التحليلات...</p>;
 
   const profitChangePct = previous.profit !== 0 ? ((current.profit - previous.profit) / Math.abs(previous.profit)) * 100 : null;
   const avgSale = current.count > 0 ? current.revenue / current.count : 0;
@@ -165,41 +148,41 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
           <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white">
             <LineChartIcon size={18} />
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">لوحة التحليلات</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">لوحة التحليلات المالية</h2>
         </div>
         <button onClick={() => window.print()} className="print:hidden flex items-center gap-1.5 px-3 sm:px-4 h-9 bg-gray-900 text-white rounded-lg text-xs font-bold hover:bg-gray-800">
-          <Printer size={14} /> <span className="hidden sm:inline">طباعة تقرير شامل</span>
+          <Printer size={14} /> <span className="hidden sm:inline">طباعة تقرير الصندوق</span>
         </button>
       </div>
 
-      {/* صندوق إغلاق الصندوق اليومي المحدث */}
+      {/* صندوق إغلاق الصندوق اليومي */}
       <div className="bg-slate-900 text-white rounded-2xl p-5 shadow-xl border border-slate-800 space-y-3">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2">
             <Landmark size={20} className="text-emerald-400" />
-            <h3 className="font-bold text-sm sm:text-base">إغلاق الصندوق اليومي</h3>
+            <h3 className="font-bold text-sm sm:text-base">إغلاق الصندوق اليومي (الكاش الحقيقي)</h3>
           </div>
           <span className="text-xs bg-slate-800 px-3 py-1 rounded-full text-slate-300 font-mono">
             {new Date().toLocaleDateString('ar-IQ')}
           </span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-          <div className="bg-slate-800/80 p-3 rounded-xl border border-emerald-500/30">
+          <div className="bg-slate-800/80 p-3.5 rounded-xl border border-emerald-500/30">
             <p className="text-xs text-emerald-400 font-medium">الكاش الفعلي في الدرج</p>
-            <p className="text-lg font-bold text-white mt-0.5">{todaySummary.totalCashInDrawer.toLocaleString()} د.ع</p>
-            <p className="text-[10px] text-slate-400 mt-1">(مبيعات كاش: {todaySummary.cashSales.toLocaleString()} + ديون مستلمة: {todaySummary.collectedDebtsToday.toLocaleString()})</p>
+            <p className="text-xl font-bold text-white mt-1">{todaySummary.totalCashInDrawer.toLocaleString()} د.ع</p>
+            <p className="text-[10px] text-slate-400 mt-1">كاش مبيعات: {todaySummary.cashSales.toLocaleString()} + ديون مستلمة: {todaySummary.collectedDebtsToday.toLocaleString()}</p>
           </div>
-          <div className="bg-slate-800/80 p-3 rounded-xl border border-amber-500/30">
+          <div className="bg-slate-800/80 p-3.5 rounded-xl border border-amber-500/30">
             <p className="text-xs text-amber-400 font-medium">ديون مسجلة اليوم (آجل)</p>
-            <p className="text-lg font-bold text-white mt-0.5">{todaySummary.creditSales.toLocaleString()} د.ع</p>
+            <p className="text-xl font-bold text-white mt-1">{todaySummary.creditSales.toLocaleString()} د.ع</p>
           </div>
-          <div className="bg-slate-800/80 p-3 rounded-xl">
+          <div className="bg-slate-800/80 p-3.5 rounded-xl">
             <p className="text-xs text-slate-400">عمليات اليوم</p>
-            <p className="text-lg font-bold text-white mt-0.5">{todaySummary.count}</p>
+            <p className="text-xl font-bold text-white mt-1">{todaySummary.count}</p>
           </div>
-          <div className="bg-slate-800/80 p-3 rounded-xl border border-indigo-500/30">
+          <div className="bg-slate-800/80 p-3.5 rounded-xl border border-indigo-500/30">
             <p className="text-xs text-indigo-400 font-medium">أرباح مبيعات اليوم</p>
-            <p className="text-lg font-bold text-white mt-0.5">{todaySummary.profit.toLocaleString()} د.ع</p>
+            <p className="text-xl font-bold text-white mt-1">{todaySummary.profit.toLocaleString()} د.ع</p>
           </div>
         </div>
       </div>
@@ -221,52 +204,11 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
         ))}
       </div>
 
-      {/* قسم الرسوم البيانية مع حل مشكلة العرض min-w-0 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 min-w-0">
-          <h3 className="font-bold text-gray-700 mb-4">أعلى 5 قطع ربحاً (آخر 30 يوم)</h3>
-          {topSellers.length === 0 ? (
-            <p className="text-gray-400 text-sm py-16 text-center">لا توجد مبيعات مسجّلة بعد.</p>
-          ) : (
-            <div className="w-full h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topSellers} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                  <XAxis type="number" hide />
-                  <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(v: any) => [`${Number(v || 0).toLocaleString()} د.ع`, 'الربح']} />
-                  <Bar dataKey="profit" radius={[0, 8, 8, 0]}>
-                    {topSellers.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 min-w-0">
-          <h3 className="font-bold text-gray-700 mb-4">اتجاه الربح اليومي</h3>
-          {profitTrend.length === 0 ? (
-            <p className="text-gray-400 text-sm py-16 text-center">لا توجد مبيعات مسجّلة بعد.</p>
-          ) : (
-            <div className="w-full h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={profitTrend} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f4" />
-                  <XAxis dataKey="day" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip formatter={(v: any) => [`${Number(v || 0).toLocaleString()} د.ع`, 'الربح']} />
-                  <Line type="monotone" dataKey="profit" stroke="#4f46e5" strokeWidth={3} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
-      </div>
-
+      {/* القطع الراكدة */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
         <div className="flex items-center gap-2 mb-3">
           <PackageX size={18} className="text-amber-600" />
-          <h3 className="font-bold text-gray-800">{stagnantItems.length} قطعة راكدة</h3>
+          <h3 className="font-bold text-gray-800">{stagnantItems.length} قطعة راكدة (لم تُبع منذ 90 يوم)</h3>
         </div>
         {stagnantItems.length === 0 ? (
           <p className="text-gray-400 text-sm">لا توجد قطع راكدة حالياً 🎉</p>
@@ -281,8 +223,9 @@ export default function AnalyticsDashboard({ storeId }: { storeId: string }) {
         )}
       </div>
 
+      {/* توصيات إعادة الطلب */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-        <h3 className="font-bold text-gray-700 mb-4">🔮 توصيات إعادة الطلب (آخر 14 يوماً)</h3>
+        <h3 className="font-bold text-gray-700 mb-4">🔮 توصيات إعادة الطلب والنواقص المتوقعة</h3>
         <div className="space-y-2 max-h-60 overflow-y-auto">
           {forecast.map((r, i) => (
             <div key={i} className={`flex justify-between items-center p-3 rounded-xl text-sm ${r.daysLeft <= 7 ? 'bg-red-50 text-red-900 border border-red-100' : 'bg-gray-50 text-gray-700'}`}>
