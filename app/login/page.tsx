@@ -13,12 +13,25 @@ export default function LoginPage() {
   const [checkingSession, setCheckingSession] = useState(true);
   const router = useRouter();
 
+  async function redirectByRole(userId: string) {
+    const { data: profile } = await supabase
+      .from('users_profile')
+      .select('role')
+      .eq('id', userId)
+      .single();
+
+    if (profile?.role === 'employee') {
+      router.replace('/pos');
+    } else {
+      router.replace('/products');
+    }
+  }
+
   useEffect(() => {
-    // التحقق فوراً إذا كان المستخدم مسجل دخوله مسبقاً
     async function checkExistingSession() {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        router.replace('/products');
+      if (session?.user) {
+        await redirectByRole(session.user.id);
       } else {
         setCheckingSession(false);
       }
@@ -31,14 +44,18 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error: loginError } = await supabase.auth.signInWithPassword({ 
+      email: email.trim(), 
+      password 
+    });
 
-    if (error) {
+    if (loginError || !data.user) {
       setError('البريد أو كلمة المرور غير صحيحة');
       setLoading(false);
       return;
     }
-    router.replace('/products');
+
+    await redirectByRole(data.user.id);
   }
 
   if (checkingSession) {
