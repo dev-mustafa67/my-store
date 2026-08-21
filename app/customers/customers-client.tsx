@@ -275,7 +275,7 @@ export default function CustomersHubPage() {
                   className="w-full h-11 px-3 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 <input
-                  placeholder="رقم الهاتف (للواتساب)"
+                  placeholder="رقم الهاتف (للواتساب من دون اضافة الصفر في البداية)"
                   value={newPhone}
                   onChange={(e) => setNewPhone(e.target.value)}
                   className="w-full h-11 px-3 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
