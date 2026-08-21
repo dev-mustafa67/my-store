@@ -1,4 +1,3 @@
-// app/signup/page.tsx
 'use client';
 
 import { Suspense, useState } from 'react';
@@ -8,7 +7,7 @@ import { supabase } from '@/lib/supabase-client';
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const inviteStoreId = searchParams.get('store'); // موجود فقط في رابط دعوة موظف
+  const inviteStoreId = searchParams.get('store');
   const isEmployeeInvite = Boolean(inviteStoreId);
 
   const [fullName, setFullName] = useState('');
@@ -25,25 +24,31 @@ function SignupForm() {
     setError(null);
     setAlreadyRegistered(false);
 
-    const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
+    // 1. إنشاء المستخدم في Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({ 
+      email: email.trim(), 
+      password 
+    });
 
     if (authError?.message?.toLowerCase().includes('already registered') || authError?.message?.toLowerCase().includes('already exists')) {
       setAlreadyRegistered(true);
       setLoading(false);
       return;
     }
+    
     if (authError || !authData.user) {
-      setError('حدث خطأ أثناء إنشاء الحساب');
+      setError('حدث خطأ أثناء إنشاء الحساب: ' + (authError?.message || ''));
       setLoading(false);
       return;
     }
 
-    let storeId = inviteStoreId;
+    let targetStoreId = inviteStoreId;
 
+    // 2. إذا كان مالكاً، يتم إنشاء متجر جديد
     if (!isEmployeeInvite) {
       const { data: store, error: storeError } = await supabase
         .from('stores')
-        .insert({ name: storeName })
+        .insert({ name: storeName.trim() })
         .select()
         .single();
 
@@ -52,85 +57,115 @@ function SignupForm() {
         setLoading(false);
         return;
       }
-      storeId = store.id;
+      targetStoreId = store.id;
     }
 
+    // 3. ربط الملف الشخصي بالرتبة المناسبة
     const { error: profileError } = await supabase.from('users_profile').insert({
       id: authData.user.id,
-      full_name: fullName,
-      email,
+      full_name: fullName.trim(),
+      email: email.trim(),
       role: isEmployeeInvite ? 'employee' : 'owner',
-      store_id: storeId,
+      store_id: targetStoreId,
     });
 
     if (profileError) {
-      setError('تم إنشاء الحساب لكن تعذّر ربطه بالمحل — تواصل مع المالك');
+      setError('تم إنشاء الحساب لكن تعذّر ربطه بالمحل — يرجى مراجعة إعدادات قاعدة البيانات');
       setLoading(false);
       return;
     }
 
-    router.push('/login');
+    // التوجيه المباشر
+    if (isEmployeeInvite) {
+      router.push('/pos');
+    } else {
+      router.push('/products');
+    }
   }
 
   return (
     <div dir="rtl" className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
       <form onSubmit={handleSignup} className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm space-y-4">
         <div className="text-center">
-          <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center mx-auto mb-3 shadow-lg shadow-indigo-200 text-2xl">
-            🧵
+          <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center mx-auto mb-3 shadow-lg shadow-indigo-200 text-2xl text-white font-bold">
+            {isEmployeeInvite ? '👤' : '🏪'}
           </div>
           <h1 className="text-xl font-bold text-gray-800">
-            {isEmployeeInvite ? 'إنشاء حساب موظف' : 'إنشاء حساب مالك محل جديد'}
+            {isEmployeeInvite ? 'انضمام موظف جديد' : 'إنشاء متجر جديد'}
           </h1>
         </div>
+
         {isEmployeeInvite && (
-          <p className="text-xs text-center text-indigo-600 bg-indigo-50 rounded-lg py-2">
-            سينضم حسابك تلقائياً إلى المحل الذي أرسل لك هذا الرابط
+          <p className="text-xs text-center text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-xl p-2.5 leading-relaxed font-medium">
+            ستنضم تلقائياً إلى نظام الكاشير الخاص بالمحل
           </p>
         )}
 
         <div>
-          <label className="block text-sm text-gray-600 mb-1">الاسم الكامل</label>
-          <input required value={fullName} onChange={(e) => setFullName(e.target.value)}
-            className="w-full h-12 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" />
+          <label className="block text-xs font-semibold text-gray-600 mb-1">الاسم الكامل</label>
+          <input 
+            required 
+            value={fullName} 
+            onChange={(e) => setFullName(e.target.value)}
+            className="w-full h-11 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" 
+          />
         </div>
 
         {!isEmployeeInvite && (
           <div>
-            <label className="block text-sm text-gray-600 mb-1">اسم المحل</label>
-            <input required value={storeName} onChange={(e) => setStoreName(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" />
+            <label className="block text-xs font-semibold text-gray-600 mb-1">اسم المحل</label>
+            <input 
+              required 
+              value={storeName} 
+              onChange={(e) => setStoreName(e.target.value)}
+              className="w-full h-11 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" 
+            />
           </div>
         )}
 
         <div>
-          <label className="block text-sm text-gray-600 mb-1">البريد الإلكتروني</label>
-          <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-            className="w-full h-12 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" />
+          <label className="block text-xs font-semibold text-gray-600 mb-1">البريد الإلكتروني</label>
+          <input 
+            required 
+            type="email" 
+            value={email} 
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full h-11 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" 
+          />
         </div>
 
         <div>
-          <label className="block text-sm text-gray-600 mb-1">كلمة المرور</label>
-          <input required type="password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)}
-            className="w-full h-12 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" />
+          <label className="block text-xs font-semibold text-gray-600 mb-1">كلمة المرور</label>
+          <input 
+            required 
+            type="password" 
+            minLength={6} 
+            value={password} 
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full h-11 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" 
+          />
         </div>
 
         {alreadyRegistered && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
-            <p className="text-amber-800 text-sm font-semibold mb-2">لديك حساب بهذا البريد مسبقاً</p>
-            <a href="/login" className="inline-block px-5 h-9 leading-9 bg-indigo-600 text-white rounded-lg text-sm font-bold">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+            <p className="text-amber-800 text-xs font-semibold mb-2">لديك حساب بهذا البريد مسبقاً</p>
+            <a href="/login" className="inline-block px-4 h-8 leading-8 bg-indigo-600 text-white rounded-lg text-xs font-bold">
               سجّل دخولك من هنا
             </a>
           </div>
         )}
-        {error && <p className="text-red-600 text-sm bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
-        <button type="submit" disabled={loading}
-          className="w-full h-12 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 shadow-lg shadow-indigo-200">
-          {loading ? 'جاري الإنشاء...' : 'إنشاء الحساب'}
+        {error && <p className="text-red-600 text-xs bg-red-50 rounded-lg p-2.5 font-medium">{error}</p>}
+
+        <button 
+          type="submit" 
+          disabled={loading}
+          className="w-full h-11 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 shadow-lg shadow-indigo-100 text-sm mt-2"
+        >
+          {loading ? 'جاري الحفظ...' : isEmployeeInvite ? 'انضمام للمحل' : 'إنشاء المتجر'}
         </button>
 
-        <p className="text-center text-sm text-gray-500">
+        <p className="text-center text-xs text-gray-500 pt-1">
           لديك حساب؟ <a href="/login" className="text-indigo-600 font-semibold">تسجيل الدخول</a>
         </p>
       </form>
@@ -140,7 +175,7 @@ function SignupForm() {
 
 export default function SignupPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">جاري التحميل...</div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-sm text-gray-400">جاري التحميل...</div>}>
       <SignupForm />
     </Suspense>
   );
