@@ -1,7 +1,6 @@
-// app/login/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase-client';
 import { Shirt, Mail, Lock } from 'lucide-react';
@@ -11,7 +10,21 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const router = useRouter();
+
+  useEffect(() => {
+    // التحقق فوراً إذا كان المستخدم مسجل دخوله مسبقاً
+    async function checkExistingSession() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        router.replace('/products');
+      } else {
+        setCheckingSession(false);
+      }
+    }
+    checkExistingSession();
+  }, [router]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -25,7 +38,15 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
-    router.push('/products');
+    router.replace('/products');
+  }
+
+  if (checkingSession) {
+    return (
+      <div dir="rtl" className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white text-sm font-medium">
+        جاري التحقق من الحساب...
+      </div>
+    );
   }
 
   return (
@@ -43,8 +64,13 @@ export default function LoginPage() {
           <label className="block text-sm text-gray-600 mb-1">البريد الإلكتروني</label>
           <div className="relative">
             <Mail size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-              className="w-full h-12 pr-10 pl-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" />
+            <input 
+              type="email" 
+              required 
+              value={email} 
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full h-12 pr-10 pl-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm" 
+            />
           </div>
         </div>
 
@@ -52,19 +78,27 @@ export default function LoginPage() {
           <label className="block text-sm text-gray-600 mb-1">كلمة المرور</label>
           <div className="relative">
             <Lock size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
-              className="w-full h-12 pr-10 pl-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" />
+            <input 
+              type="password" 
+              required 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full h-12 pr-10 pl-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm" 
+            />
           </div>
         </div>
 
-        {error && <p className="text-red-600 text-sm bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+        {error && <p className="text-red-600 text-xs bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
-        <button type="submit" disabled={loading}
-          className="w-full h-12 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 shadow-lg shadow-indigo-200 transition-colors">
+        <button 
+          type="submit" 
+          disabled={loading}
+          className="w-full h-12 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 shadow-lg shadow-indigo-200 transition-colors text-sm"
+        >
           {loading ? 'جاري الدخول...' : 'دخول'}
         </button>
 
-        <p className="text-center text-sm text-gray-500">
+        <p className="text-center text-xs text-gray-500">
           مالك محل جديد؟ <a href="/signup" className="text-indigo-600 font-semibold">أنشئ حساباً</a>
         </p>
       </form>
