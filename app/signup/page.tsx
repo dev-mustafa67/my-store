@@ -3,6 +3,8 @@
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase-client';
+import { Shirt, Mail, Lock, User, Store, Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 
 function SignupForm() {
   const router = useRouter();
@@ -14,6 +16,7 @@ function SignupForm() {
   const [storeName, setStoreName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -24,7 +27,6 @@ function SignupForm() {
     setError(null);
     setAlreadyRegistered(false);
 
-    // 1. إنشاء المستخدم في Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({ 
       email: email.trim(), 
       password 
@@ -37,14 +39,13 @@ function SignupForm() {
     }
     
     if (authError || !authData.user) {
-      setError('حدث خطأ أثناء إنشاء الحساب: ' + (authError?.message || ''));
+      setError('حدث خطأ أثناء إنشاء الحساب، يرجى المحاولة لاحقاً');
       setLoading(false);
       return;
     }
 
     let targetStoreId = inviteStoreId;
 
-    // 2. إذا كان مالكاً، يتم إنشاء متجر جديد
     if (!isEmployeeInvite) {
       const { data: store, error: storeError } = await supabase
         .from('stores')
@@ -53,14 +54,13 @@ function SignupForm() {
         .single();
 
       if (storeError || !store) {
-        setError('تعذّر إنشاء المحل — حاول مجدداً');
+        setError('تعذّر إنشاء المحل، يرجى المحاولة لاحقاً');
         setLoading(false);
         return;
       }
       targetStoreId = store.id;
     }
 
-    // 3. ربط الملف الشخصي بالرتبة المناسبة
     const { error: profileError } = await supabase.from('users_profile').insert({
       id: authData.user.id,
       full_name: fullName.trim(),
@@ -70,12 +70,11 @@ function SignupForm() {
     });
 
     if (profileError) {
-      setError('تم إنشاء الحساب لكن تعذّر ربطه بالمحل — يرجى مراجعة إعدادات قاعدة البيانات');
+      setError('تم إنشاء الحساب لكن حدث خطأ بالربط، تواصل مع الدعم الفني');
       setLoading(false);
       return;
     }
 
-    // التوجيه المباشر
     if (isEmployeeInvite) {
       router.push('/pos');
     } else {
@@ -84,98 +83,144 @@ function SignupForm() {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
-      <form onSubmit={handleSignup} className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm space-y-4">
-        <div className="text-center">
-          <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center mx-auto mb-3 shadow-lg shadow-indigo-200 text-2xl text-white font-bold">
-            {isEmployeeInvite ? '👤' : '🏪'}
-          </div>
-          <h1 className="text-xl font-bold text-gray-800">
-            {isEmployeeInvite ? 'انضمام موظف جديد' : 'إنشاء متجر جديد'}
-          </h1>
-        </div>
+    <div dir="rtl" className="min-h-screen flex items-center justify-center p-4 sm:p-6 bg-[#0f172a] relative overflow-hidden">
+      {/* خلفية جمالية */}
+      <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-600/20 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/20 rounded-full blur-[120px] pointer-events-none" />
 
-        {isEmployeeInvite && (
-          <p className="text-xs text-center text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-xl p-2.5 leading-relaxed font-medium">
-            ستنضم تلقائياً إلى نظام الكاشير الخاص بالمحل
+      <div className="w-full max-w-md z-10 py-6">
+        <form onSubmit={handleSignup} className="bg-white/95 backdrop-blur-xl rounded-[2rem] shadow-2xl border border-white/20 p-8 sm:p-10 space-y-5">
+          
+          <div className="text-center space-y-2 mb-6">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 to-blue-500 flex items-center justify-center mx-auto shadow-lg shadow-indigo-200 text-white">
+              {isEmployeeInvite ? <User size={30} /> : <Shirt size={30} />}
+            </div>
+            <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">
+              {isEmployeeInvite ? 'انضمام موظف جديد' : 'إنشاء متجر جديد'}
+            </h1>
+            <p className="text-sm text-gray-500 font-medium">
+              {isEmployeeInvite ? 'أكمل بياناتك للبدء بالبيع' : 'سجل الآن وابدأ بإدارة مبيعاتك وأرباحك بسهولة'}
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5 ml-1">الاسم الكامل</label>
+              <div className="relative">
+                <User size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input 
+                  required 
+                  placeholder="محمد أحمد"
+                  value={fullName} 
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full h-12 pr-12 pl-4 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm transition-all" 
+                />
+              </div>
+            </div>
+
+            {!isEmployeeInvite && (
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5 ml-1">اسم المحل تجاري</label>
+                <div className="relative">
+                  <Store size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input 
+                    required 
+                    placeholder="بوتيك الأناقة"
+                    value={storeName} 
+                    onChange={(e) => setStoreName(e.target.value)}
+                    className="w-full h-12 pr-12 pl-4 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm transition-all" 
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5 ml-1">البريد الإلكتروني</label>
+              <div className="relative">
+                <Mail size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input 
+                  required 
+                  type="email" 
+                  placeholder="admin@store.com"
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full h-12 pr-12 pl-4 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm transition-all" 
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5 ml-1">كلمة المرور (6 أحرف على الأقل)</label>
+              <div className="relative">
+                <Lock size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input 
+                  required 
+                  type={showPassword ? 'text' : 'password'} 
+                  minLength={6} 
+                  placeholder="••••••••"
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full h-12 pr-12 pl-12 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm transition-all" 
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {alreadyRegistered && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center space-y-2">
+              <p className="text-amber-800 text-xs font-bold">هذا البريد الإلكتروني مسجل لدينا بالفعل</p>
+              <Link href="/login" className="inline-block px-5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition">
+                الذهاب لتسجيل الدخول
+              </Link>
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-semibold rounded-xl p-3 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0" /> {error}
+            </div>
+          )}
+
+          <button 
+            type="submit" 
+            disabled={loading}
+            className="w-full h-12 mt-2 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl font-bold hover:from-indigo-700 hover:to-blue-700 focus:ring-4 focus:ring-indigo-100 disabled:opacity-70 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200"
+          >
+            {loading ? (
+              <Loader2 size={20} className="animate-spin" />
+            ) : (
+              <>
+                {isEmployeeInvite ? 'تأكيد الانضمام للمحل' : 'إنشاء المتجر وبدء التجربة'} <ArrowRight size={18} />
+              </>
+            )}
+          </button>
+
+          <p className="text-center text-sm text-gray-600 pt-1 font-medium">
+            لديك حساب مسبقاً؟{' '}
+            <Link href="/login" className="text-indigo-600 font-bold hover:text-indigo-700 transition-colors">
+              تسجيل الدخول
+            </Link>
           </p>
-        )}
-
-        <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1">الاسم الكامل</label>
-          <input 
-            required 
-            value={fullName} 
-            onChange={(e) => setFullName(e.target.value)}
-            className="w-full h-11 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" 
-          />
-        </div>
-
-        {!isEmployeeInvite && (
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">اسم المحل</label>
-            <input 
-              required 
-              value={storeName} 
-              onChange={(e) => setStoreName(e.target.value)}
-              className="w-full h-11 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" 
-            />
-          </div>
-        )}
-
-        <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1">البريد الإلكتروني</label>
-          <input 
-            required 
-            type="email" 
-            value={email} 
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full h-11 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" 
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1">كلمة المرور</label>
-          <input 
-            required 
-            type="password" 
-            minLength={6} 
-            value={password} 
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full h-11 px-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" 
-          />
-        </div>
-
-        {alreadyRegistered && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
-            <p className="text-amber-800 text-xs font-semibold mb-2">لديك حساب بهذا البريد مسبقاً</p>
-            <a href="/login" className="inline-block px-4 h-8 leading-8 bg-indigo-600 text-white rounded-lg text-xs font-bold">
-              سجّل دخولك من هنا
-            </a>
-          </div>
-        )}
-
-        {error && <p className="text-red-600 text-xs bg-red-50 rounded-lg p-2.5 font-medium">{error}</p>}
-
-        <button 
-          type="submit" 
-          disabled={loading}
-          className="w-full h-11 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 shadow-lg shadow-indigo-100 text-sm mt-2"
-        >
-          {loading ? 'جاري الحفظ...' : isEmployeeInvite ? 'انضمام للمحل' : 'إنشاء المتجر'}
-        </button>
-
-        <p className="text-center text-xs text-gray-500 pt-1">
-          لديك حساب؟ <a href="/login" className="text-indigo-600 font-semibold">تسجيل الدخول</a>
-        </p>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }
 
 export default function SignupPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-sm text-gray-400">جاري التحميل...</div>}>
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+      </div>
+    }>
       <SignupForm />
     </Suspense>
   );
