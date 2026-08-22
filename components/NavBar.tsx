@@ -17,7 +17,8 @@ import {
   LogOut, 
   Shirt, 
   Lock, 
-  AlertTriangle 
+  AlertTriangle,
+  Clock
 } from 'lucide-react';
 
 export default function NavBar() {
@@ -36,7 +37,7 @@ export default function NavBar() {
     ...(sub.isSuperAdmin ? [{ href: '/admin', label: 'إدارة المنصة', icon: Shield }] : []),
   ];
 
-  // تحويل إجباري فوري لصفحة الاشتراك عند انتهاء الصلاحية
+  // توجيه إجباري إلى صفحة الاشتراك إذا كان الحساب مقفلاً
   useEffect(() => {
     if (!sub.loading && sub.isExpired && !sub.isSuperAdmin) {
       if (pathname !== '/billing' && pathname !== '/login' && pathname !== '/signup') {
@@ -50,11 +51,9 @@ export default function NavBar() {
     router.push('/login');
   }
 
-  // تنبيه قبل 3 أيام
   const showWarningBanner =
     !sub.loading &&
     !sub.isExpired &&
-    sub.status !== 'pending_payment' &&
     sub.daysLeft !== null &&
     sub.daysLeft <= 3 &&
     sub.daysLeft > 0;
@@ -74,7 +73,6 @@ export default function NavBar() {
 
           <div className="flex gap-1 flex-wrap">
             {links.map((l) => {
-              // تعطيل جميع الروابط عدا الاشتراك عند انتهاء الصلاحية
               const isLockedLink = isRestricted && l.href !== '/billing';
 
               return (
@@ -120,23 +118,30 @@ export default function NavBar() {
         </div>
       )}
 
-      {/* حظر الشاشة بالكامل إذا كان المستخدم خارج صفحة الاشتراك */}
+      {/* شاشة الحظر الكامل */}
       {isRestricted && pathname !== '/billing' && (
         <div dir="rtl" className="fixed inset-0 bg-slate-950/90 backdrop-blur-lg z-[99999] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full text-center space-y-4 shadow-2xl">
-            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
-              <Lock size={32} />
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto ${sub.status === 'pending_payment' ? 'bg-amber-100 text-amber-600' : 'bg-red-100 text-red-600'}`}>
+              {sub.status === 'pending_payment' ? <Clock size={32} /> : <Lock size={32} />}
             </div>
-            <h2 className="text-xl font-bold text-gray-900">انتهى اشتراك المحل</h2>
+            
+            <h2 className="text-xl font-bold text-gray-900">
+              {sub.status === 'pending_payment' ? 'طلب التجديد قيد المراجعة' : 'انتهى اشتراك المحل'}
+            </h2>
+            
             <p className="text-xs sm:text-sm text-gray-500 leading-relaxed">
-              جميع أقسام النظام (الكاشير، المنتجات، الديون، والزبائن) مقفلة حالياً. يرجى تجديد الاشتراك الشهري للمتابعة.
+              {sub.status === 'pending_payment'
+                ? 'تم استلام طلب التحويل، سيتم فتح كافة أقسام النظام تلقائياً فور مطابقة الدفعة وتفعيلها من قبل الإدارة.'
+                : 'لقد انتهت فترة صلاحية المتجر. يرجى تجديد الاشتراك لفتح النظام ومتابعة البيع وإدارة المخزون.'}
             </p>
+
             <div className="pt-2 flex flex-col gap-2">
               <Link
                 href="/billing"
                 className="w-full h-11 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center justify-center hover:bg-indigo-700 transition"
               >
-                تجديد الاشتراك الآن
+                صفحة تفاصيل الاشتراك والدفع
               </Link>
               <button
                 onClick={logout}
