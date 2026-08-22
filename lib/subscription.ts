@@ -41,7 +41,7 @@ export function useSubscription(): SubscriptionInfo {
           .eq('id', user.id)
           .single();
 
-        // 1. مسؤول المنصة لا ينتهي حسابه أبداً
+        // 1. مسؤول المنصة دائم الفتح
         if (profile?.is_super_admin) {
           if (isMounted) {
             setSub({
@@ -61,7 +61,7 @@ export function useSubscription(): SubscriptionInfo {
           return;
         }
 
-        // 2. جلب بيانات المحل من قاعدة البيانات
+        // 2. فحص بيانات المحل من قاعدة البيانات
         const { data: store } = await supabase
           .from('stores')
           .select('subscription_status, subscription_expires_at')
@@ -79,13 +79,11 @@ export function useSubscription(): SubscriptionInfo {
         const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
         let currentStatus: SubStatus = (store.subscription_status as SubStatus) || 'trial';
-        let isExpired = false;
 
-        // فحص حالة الانتهاء الصارم
-        if (currentStatus === 'expired' || (currentStatus !== 'pending_payment' && diffMs <= 0)) {
-          currentStatus = 'expired';
-          isExpired = true;
-        }
+        // الحساب مقفل إذا انتهى الوقت أو كانت الحالة expired
+        // طلب التجديد (pending_payment) لن يفتح النظام إذا كان الوقت منتهياً بالفعل
+        const isTimeExpired = expiresAtTime > 0 && diffMs <= 0;
+        const isExpired = isTimeExpired || currentStatus === 'expired';
 
         if (isMounted) {
           setSub({
