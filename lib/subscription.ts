@@ -35,13 +35,13 @@ export function useSubscription(): SubscriptionInfo {
           return;
         }
 
-        // 1. فحص هل المستخدم مسؤول منصة (Super Admin)
         const { data: profile } = await supabase
           .from('users_profile')
           .select('store_id, is_super_admin')
           .eq('id', user.id)
           .single();
 
+        // 1. مسؤول المنصة لا ينتهي حسابه أبداً
         if (profile?.is_super_admin) {
           if (isMounted) {
             setSub({
@@ -61,7 +61,7 @@ export function useSubscription(): SubscriptionInfo {
           return;
         }
 
-        // 2. جلب بيانات المتجر وتاريخ الانتهاء
+        // 2. جلب بيانات المحل من قاعدة البيانات
         const { data: store } = await supabase
           .from('stores')
           .select('subscription_status, subscription_expires_at')
@@ -75,19 +75,14 @@ export function useSubscription(): SubscriptionInfo {
 
         const now = new Date().getTime();
         const expiresAtTime = store.subscription_expires_at ? new Date(store.subscription_expires_at).getTime() : 0;
-        
-        // حساب الفارق بالأيام
         const diffMs = expiresAtTime - now;
         const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
         let currentStatus: SubStatus = (store.subscription_status as SubStatus) || 'trial';
         let isExpired = false;
 
-        // التحقق الفعلي من الانتهاء
-        if (currentStatus === 'pending_payment') {
-          // بانتظار مراجعة الدفع من قِبل إدارة المنصة
-          isExpired = false;
-        } else if (daysLeft <= 0 || currentStatus === 'expired') {
+        // فحص حالة الانتهاء الصارم
+        if (currentStatus === 'expired' || (currentStatus !== 'pending_payment' && diffMs <= 0)) {
           currentStatus = 'expired';
           isExpired = true;
         }
@@ -95,7 +90,7 @@ export function useSubscription(): SubscriptionInfo {
         if (isMounted) {
           setSub({
             status: currentStatus,
-            daysLeft: daysLeft > 0 ? daysLeft : 0,
+            daysLeft: isExpired ? 0 : Math.max(0, daysLeft),
             expiresAt: store.subscription_expires_at,
             isExpired,
             isSuperAdmin: false,
@@ -103,7 +98,7 @@ export function useSubscription(): SubscriptionInfo {
           });
         }
       } catch (err) {
-        console.error('Error checking subscription:', err);
+        console.error('Subscription error:', err);
         if (isMounted) setSub((s) => ({ ...s, loading: false }));
       }
     }
