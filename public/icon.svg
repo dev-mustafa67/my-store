@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+  </defs>
+  <!-- الخلفية المنحنية -->
+  <rect width="512" height="512" rx="128" fill="url(#grad)" />
+  <!-- الشعار (قميص/متجر أنيق) -->
+  <path d="M155 135 L210 190 C238 215 274 215 302 190 L357 135 L435 190 L385 265 L350 245 L350 410 L162 410 L162 245 L127 265 L77 190 Z" fill="#ffffff" />
+  <!-- أزرار الكاشير والتصميم الداخلي -->
+  <circle cx="256" cy="265" r="14" fill="#4f46e5" />
+  <circle cx="256" cy="318" r="14" fill="#4f46e5" />
+  <circle cx="256" cy="370" r="14" fill="#4f46e5" />
+</svg>
