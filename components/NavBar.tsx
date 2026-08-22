@@ -37,7 +37,7 @@ export default function NavBar() {
     ...(sub.isSuperAdmin ? [{ href: '/admin', label: 'إدارة المنصة', icon: Shield }] : []),
   ];
 
-  // توجيه إجباري إلى صفحة الاشتراك إذا كان الحساب مقفلاً
+  // توجيه إجباري إلى صفحة الاشتراك على الفور عند انتهاء الصلاحية
   useEffect(() => {
     if (!sub.loading && sub.isExpired && !sub.isSuperAdmin) {
       if (pathname !== '/billing' && pathname !== '/login' && pathname !== '/signup') {
@@ -51,14 +51,14 @@ export default function NavBar() {
     router.push('/login');
   }
 
+  // تنبيه قبل 3 أيام فقط للمشتركين النشطين
   const showWarningBanner =
     !sub.loading &&
     !sub.isExpired &&
-    sub.daysLeft !== null &&
     sub.daysLeft <= 3 &&
     sub.daysLeft > 0;
 
-  const isRestricted = !sub.loading && sub.isExpired && !sub.isSuperAdmin;
+  const isLockedOut = !sub.loading && sub.isExpired && !sub.isSuperAdmin;
 
   return (
     <>
@@ -73,23 +73,23 @@ export default function NavBar() {
 
           <div className="flex gap-1 flex-wrap">
             {links.map((l) => {
-              const isLockedLink = isRestricted && l.href !== '/billing';
+              const isBlocked = isLockedOut && l.href !== '/billing';
 
               return (
                 <Link
                   key={l.href}
-                  href={isLockedLink ? '/billing' : l.href}
+                  href={isBlocked ? '/billing' : l.href}
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
                     pathname === l.href 
                       ? 'bg-indigo-600 text-white' 
-                      : isLockedLink
-                      ? 'text-slate-500 opacity-50 cursor-not-allowed'
+                      : isBlocked
+                      ? 'text-slate-600 opacity-40 cursor-not-allowed'
                       : 'text-slate-300 hover:bg-white/10'
                   }`}
                 >
                   <l.icon size={15} />
                   <span className="hidden sm:inline">{l.label}</span>
-                  {isLockedLink && <Lock size={10} className="text-red-400" />}
+                  {isBlocked && <Lock size={10} className="text-red-400" />}
                 </Link>
               );
             })}
@@ -118,30 +118,30 @@ export default function NavBar() {
         </div>
       )}
 
-      {/* شاشة الحظر الكامل */}
-      {isRestricted && pathname !== '/billing' && (
-        <div dir="rtl" className="fixed inset-0 bg-slate-950/90 backdrop-blur-lg z-[99999] flex items-center justify-center p-4">
+      {/* قفل الهاتف والشاشة بالكامل (Overlay غير قابل للإغلاق) */}
+      {isLockedOut && pathname !== '/billing' && (
+        <div dir="rtl" className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[999999] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full text-center space-y-4 shadow-2xl">
             <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto ${sub.status === 'pending_payment' ? 'bg-amber-100 text-amber-600' : 'bg-red-100 text-red-600'}`}>
               {sub.status === 'pending_payment' ? <Clock size={32} /> : <Lock size={32} />}
             </div>
             
             <h2 className="text-xl font-bold text-gray-900">
-              {sub.status === 'pending_payment' ? 'طلب التجديد قيد المراجعة' : 'انتهى اشتراك المحل'}
+              {sub.status === 'pending_payment' ? 'الطلب قيد المراجعة' : 'انتهى اشتراك المتجر'}
             </h2>
             
             <p className="text-xs sm:text-sm text-gray-500 leading-relaxed">
               {sub.status === 'pending_payment'
-                ? 'تم استلام طلب التحويل، سيتم فتح كافة أقسام النظام تلقائياً فور مطابقة الدفعة وتفعيلها من قبل الإدارة.'
-                : 'لقد انتهت فترة صلاحية المتجر. يرجى تجديد الاشتراك لفتح النظام ومتابعة البيع وإدارة المخزون.'}
+                ? 'تم إرسال طلب التحويل إلى الإدارة. سيبقى النظام مقفلاً حتى يتم تفعيل المتجر ومطابقة الحساب.'
+                : 'لقد انتهت فترة الاستخدام المتاحة. تم قفل جميع أقسام النظام حتى يتم دفع رسوم الاشتراك وتجديده.'}
             </p>
 
             <div className="pt-2 flex flex-col gap-2">
               <Link
                 href="/billing"
-                className="w-full h-11 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center justify-center hover:bg-indigo-700 transition"
+                className="w-full h-11 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center justify-center hover:bg-indigo-700 transition shadow-lg shadow-indigo-100"
               >
-                صفحة تفاصيل الاشتراك والدفع
+                الذهاب لصفحة الدفع والتجديد
               </Link>
               <button
                 onClick={logout}
