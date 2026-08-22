@@ -1,11 +1,24 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase-client';
 import { useUserRole } from '@/lib/permissions';
 import { useSubscription } from '@/lib/subscription';
-import { Package, Receipt, BookText, Users, BarChart3, CreditCard, Shield, LogOut, Shirt, Lock, AlertTriangle } from 'lucide-react';
+import { 
+  Package, 
+  Receipt, 
+  BookText, 
+  Users, 
+  BarChart3, 
+  CreditCard, 
+  Shield, 
+  LogOut, 
+  Shirt, 
+  Lock, 
+  AlertTriangle 
+} from 'lucide-react';
 
 export default function NavBar() {
   const pathname = usePathname();
@@ -23,12 +36,21 @@ export default function NavBar() {
     ...(sub.isSuperAdmin ? [{ href: '/admin', label: 'إدارة المنصة', icon: Shield }] : []),
   ];
 
+  // تحويل إجباري فوري لصفحة الاشتراك عند انتهاء الصلاحية
+  useEffect(() => {
+    if (!sub.loading && sub.isExpired && !sub.isSuperAdmin) {
+      if (pathname !== '/billing' && pathname !== '/login' && pathname !== '/signup') {
+        router.replace('/billing');
+      }
+    }
+  }, [sub.loading, sub.isExpired, sub.isSuperAdmin, pathname, router]);
+
   async function logout() {
     await supabase.auth.signOut();
     router.push('/login');
   }
 
-  // تنبيه قبل 3 أيام فقط إذا لم يكن الحساب منتهياً أو بانتظار الدفع
+  // تنبيه قبل 3 أيام
   const showWarningBanner =
     !sub.loading &&
     !sub.isExpired &&
@@ -37,14 +59,7 @@ export default function NavBar() {
     sub.daysLeft <= 3 &&
     sub.daysLeft > 0;
 
-  // هل يتم قفل التطبيق؟ (عند الانتهاء في أي صفحة غير الاشتراك والإدارة)
-  const isLockedPage =
-    !sub.loading &&
-    sub.isExpired &&
-    !sub.isSuperAdmin &&
-    pathname !== '/billing' &&
-    pathname !== '/login' &&
-    pathname !== '/signup';
+  const isRestricted = !sub.loading && sub.isExpired && !sub.isSuperAdmin;
 
   return (
     <>
@@ -58,18 +73,28 @@ export default function NavBar() {
           </div>
 
           <div className="flex gap-1 flex-wrap">
-            {links.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
-                  pathname === l.href ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-white/10'
-                }`}
-              >
-                <l.icon size={15} />
-                <span className="hidden sm:inline">{l.label}</span>
-              </Link>
-            ))}
+            {links.map((l) => {
+              // تعطيل جميع الروابط عدا الاشتراك عند انتهاء الصلاحية
+              const isLockedLink = isRestricted && l.href !== '/billing';
+
+              return (
+                <Link
+                  key={l.href}
+                  href={isLockedLink ? '/billing' : l.href}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                    pathname === l.href 
+                      ? 'bg-indigo-600 text-white' 
+                      : isLockedLink
+                      ? 'text-slate-500 opacity-50 cursor-not-allowed'
+                      : 'text-slate-300 hover:bg-white/10'
+                  }`}
+                >
+                  <l.icon size={15} />
+                  <span className="hidden sm:inline">{l.label}</span>
+                  {isLockedLink && <Lock size={10} className="text-red-400" />}
+                </Link>
+              );
+            })}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -95,23 +120,23 @@ export default function NavBar() {
         </div>
       )}
 
-      {/* شاشة الحظر والقفل الكامل عند انتهاء الاشتراك */}
-      {isLockedPage && (
-        <div dir="rtl" className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[999] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full text-center space-y-4 shadow-2xl border border-gray-100">
-            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+      {/* حظر الشاشة بالكامل إذا كان المستخدم خارج صفحة الاشتراك */}
+      {isRestricted && pathname !== '/billing' && (
+        <div dir="rtl" className="fixed inset-0 bg-slate-950/90 backdrop-blur-lg z-[99999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full text-center space-y-4 shadow-2xl">
+            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
               <Lock size={32} />
             </div>
-            <h2 className="text-xl font-bold text-gray-900">انتهت فترة الاشتراك</h2>
+            <h2 className="text-xl font-bold text-gray-900">انتهى اشتراك المحل</h2>
             <p className="text-xs sm:text-sm text-gray-500 leading-relaxed">
-              لقد انتهت مهلة الاستخدام المتاحة لمتجرك. لمواصلة تسجيل المبيعات والوصول لبياناتك ومنتجاتك، يرجى تجديد الاشتراك الشهري.
+              جميع أقسام النظام (الكاشير، المنتجات، الديون، والزبائن) مقفلة حالياً. يرجى تجديد الاشتراك الشهري للمتابعة.
             </p>
             <div className="pt-2 flex flex-col gap-2">
               <Link
                 href="/billing"
-                className="w-full h-11 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center justify-center hover:bg-indigo-700 transition shadow-lg shadow-indigo-100"
+                className="w-full h-11 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center justify-center hover:bg-indigo-700 transition"
               >
-                الذهاب لصفحة تجديد الاشتراك
+                تجديد الاشتراك الآن
               </Link>
               <button
                 onClick={logout}
