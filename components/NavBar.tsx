@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase-client';
 import { useUserRole } from '@/lib/permissions';
 import { useSubscription } from '@/lib/subscription';
+import { db } from '@/lib/offline-db'; // استيراد قاعدة البيانات المحلية لمسحها
 import { 
   Package, 
   Receipt, 
@@ -37,7 +38,6 @@ export default function NavBar() {
     ...(sub.isSuperAdmin ? [{ href: '/admin', label: 'إدارة المنصة', icon: Shield }] : []),
   ];
 
-  // توجيه إجباري إلى صفحة الاشتراك على الفور عند انتهاء الصلاحية
   useEffect(() => {
     if (!sub.loading && sub.isExpired && !sub.isSuperAdmin) {
       if (pathname !== '/billing' && pathname !== '/login' && pathname !== '/signup') {
@@ -46,15 +46,26 @@ export default function NavBar() {
     }
   }, [sub.loading, sub.isExpired, sub.isSuperAdmin, pathname, router]);
 
+  // تحديث دالة تسجيل الخروج لمسح تداخل البيانات
   async function logout() {
+    try {
+      // 1. مسح الذاكرة المحلية للكاشير (الأوفلاين) بالكامل لمنع تداخل المنتجات بين الحسابات
+      await db.product_variants.clear();
+      await db.sales_queue.clear();
+      localStorage.clear();
+    } catch (err) {
+      console.error('Error clearing local database:', err);
+    }
+    
+    // 2. تسجيل الخروج من النظام السحابي
     await supabase.auth.signOut();
     router.push('/login');
   }
 
-  // تنبيه قبل 3 أيام فقط للمشتركين النشطين
   const showWarningBanner =
     !sub.loading &&
     !sub.isExpired &&
+    sub.daysLeft !== null &&
     sub.daysLeft <= 3 &&
     sub.daysLeft > 0;
 
@@ -105,7 +116,6 @@ export default function NavBar() {
         </div>
       </nav>
 
-      {/* شريط التحذير قبل 3 أيام */}
       {showWarningBanner && (
         <div dir="rtl" className="bg-amber-500 text-slate-950 px-4 py-2 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-sm print:hidden">
           <AlertTriangle size={16} />
@@ -118,7 +128,6 @@ export default function NavBar() {
         </div>
       )}
 
-      {/* قفل الهاتف والشاشة بالكامل (Overlay غير قابل للإغلاق) */}
       {isLockedOut && pathname !== '/billing' && (
         <div dir="rtl" className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[999999] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full text-center space-y-4 shadow-2xl">
