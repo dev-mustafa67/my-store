@@ -7,7 +7,7 @@ export type SubStatus = 'trial' | 'active' | 'pending_payment' | 'expired';
 
 export interface SubscriptionInfo {
   status: SubStatus;
-  daysLeft: number | null;
+  daysLeft: number;
   expiresAt: string | null;
   isExpired: boolean;
   isSuperAdmin: boolean;
@@ -17,7 +17,7 @@ export interface SubscriptionInfo {
 export function useSubscription(): SubscriptionInfo {
   const [sub, setSub] = useState<SubscriptionInfo>({
     status: 'trial',
-    daysLeft: null,
+    daysLeft: 0,
     expiresAt: null,
     isExpired: false,
     isSuperAdmin: false,
@@ -35,18 +35,18 @@ export function useSubscription(): SubscriptionInfo {
           return;
         }
 
+        // 1. فحص مسؤول المنصة الرئيسي
         const { data: profile } = await supabase
           .from('users_profile')
           .select('store_id, is_super_admin')
           .eq('id', user.id)
           .single();
 
-        // 1. مسؤول المنصة دائم الفتح
         if (profile?.is_super_admin) {
           if (isMounted) {
             setSub({
               status: 'active',
-              daysLeft: null,
+              daysLeft: 999,
               expiresAt: null,
               isExpired: false,
               isSuperAdmin: true,
@@ -61,7 +61,7 @@ export function useSubscription(): SubscriptionInfo {
           return;
         }
 
-        // 2. فحص بيانات المحل من قاعدة البيانات
+        // 2. جلب بيانات المتجر من قاعدة البيانات
         const { data: store } = await supabase
           .from('stores')
           .select('subscription_status, subscription_expires_at')
@@ -69,26 +69,28 @@ export function useSubscription(): SubscriptionInfo {
           .single();
 
         if (!store) {
-          if (isMounted) setSub((s) => ({ ...s, loading: false }));
+          if (isMounted) setSub((s) => ({ ...s, loading: false, isExpired: true }));
           return;
         }
 
-        const now = new Date().getTime();
+        const now = Date.now();
         const expiresAtTime = store.subscription_expires_at ? new Date(store.subscription_expires_at).getTime() : 0;
         const diffMs = expiresAtTime - now;
         const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
-        let currentStatus: SubStatus = (store.subscription_status as SubStatus) || 'trial';
+        const status = (store.subscription_status as SubStatus) || 'trial';
 
-        // الحساب مقفل إذا انتهى الوقت أو كانت الحالة expired
-        // طلب التجديد (pending_payment) لن يفتح النظام إذا كان الوقت منتهياً بالفعل
-        const isTimeExpired = expiresAtTime > 0 && diffMs <= 0;
-        const isExpired = isTimeExpired || currentStatus === 'expired';
+        // 3. التحقق الحاسم: المتجر يكون مفعلاً فقط إذا كانت حالته active أو trial مع تاريخ مستقبلي
+        const hasValidTime = expiresAtTime > now;
+        const isOfficiallyActive = (status === 'active' || status === 'trial') && hasValidTime;
+        
+        // إذا لم يكن مفعلاً، فهو مقفل فوراً
+        const isExpired = !isOfficiallyActive;
 
         if (isMounted) {
           setSub({
-            status: currentStatus,
-            daysLeft: isExpired ? 0 : Math.max(0, daysLeft),
+            status,
+            daysLeft: hasValidTime ? Math.max(0, daysLeft) : 0,
             expiresAt: store.subscription_expires_at,
             isExpired,
             isSuperAdmin: false,
@@ -96,8 +98,8 @@ export function useSubscription(): SubscriptionInfo {
           });
         }
       } catch (err) {
-        console.error('Subscription error:', err);
-        if (isMounted) setSub((s) => ({ ...s, loading: false }));
+        console.error('Subscription check error:', err);
+        if (isMounted) setSub((s) => ({ ...s, loading: false, isExpired: true }));
       }
     }
 
