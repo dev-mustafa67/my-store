@@ -198,6 +198,7 @@ export default function POSPage() {
   }
 
   async function completeSale() {
+   async function completeSale() {
     if (sub.isExpired && !sub.isSuperAdmin) return;
     if (!storeId) return;
     
@@ -209,10 +210,16 @@ export default function POSPage() {
     const saleId = crypto.randomUUID();
     const now = new Date().toISOString();
     const customer = customers.find((c) => c.id === selectedCustomer);
+    
+    // مصفوفة لحفظ أرقام المبيعات لتسهيل مسحها إذا رجع الطلب
+    const generatedSaleIds: string[] = [];
 
     for (const item of cart) {
+      const uniqueSaleId = crypto.randomUUID();
+      generatedSaleIds.push(uniqueSaleId);
+
       await db.sales_queue.add({
-        id: crypto.randomUUID(),
+        id: uniqueSaleId,
         saleId,
         storeId,
         variantId: item.id,
@@ -231,7 +238,6 @@ export default function POSPage() {
         lastSoldAt: now,
       });
 
-      // تسجيل في دفتر الديون إذا كان البيع آجل
       if (saleType === 'credit' && customer) {
         await supabase.from('debts').insert({
           store_id: storeId,
@@ -244,12 +250,14 @@ export default function POSPage() {
       }
     }
 
-    // إرسال الطلب لجدول التوصيل إذا كان الخيار توصيل 🚚 مع ربطه بـ sale_id لتمكين الإرجاع
+    // إرسال الطلب لجدول التوصيل مع حفظ السلة بالكامل للاسترجاع الذكي 🚚
     if (saleType === 'delivery' && customer) {
       const itemsSummary = cart.map(i => `${i.productName} (${i.qtyInCart})`).join(' + ');
       await supabase.from('delivery_orders').insert({
         store_id: storeId,
         sale_id: saleId, 
+        sales_ids: generatedSaleIds, // حفظ الأرقام لمسحها لاحقاً
+        cart_data: cart, // حفظ السلة لإرجاع المخزون
         customer_name: customer.name,
         phone: customer.phone,
         instagram: customer.instagram,
