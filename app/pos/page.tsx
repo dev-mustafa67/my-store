@@ -198,7 +198,7 @@ export default function POSPage() {
     const customer = customers.find((c) => c.id === selectedCustomer);
 
     for (const item of cart) {
-      // إذا كان الخيار "كاش" أو "دين"، سجل المبيعات فوراً لتدخل الأرباح
+      // إذا لم يكن توصيل، نسجله كمبيعات فوراً ليدخل في الأرباح
       if (saleType !== 'delivery') {
         await db.sales_queue.add({
           id: crypto.randomUUID(),
@@ -216,14 +216,14 @@ export default function POSPage() {
         } as any);
       }
       
-      // للمبيعات والتوصيل: اسحب البضاعة من المخزون المحلي
+      // نخصم البضاعة محلياً لكي ينقص المخزون في الكاشير
       await db.product_variants.update(item.id, {
         quantity: item.quantity - item.qtyInCart,
         lastSoldAt: now,
       });
 
-      // وللتوصيل بالذات: حدث المخزون في السيرفر فوراً لكي لا تنباع لشخص آخر
-      if (navigator.onLine) {
+      // خدعة التوصيل: نخصمه من السيرفر يدوياً لكي "يُحجز" ولا ينباع لغيره
+      if (saleType === 'delivery' && navigator.onLine) {
         supabase.from('product_variants').update({ quantity: item.quantity - item.qtyInCart }).eq('id', item.id).then();
       }
 
@@ -239,12 +239,12 @@ export default function POSPage() {
       }
     }
 
-    // إرسال الطلب لجدول التوصيل (بدون تسجيل مبيعات)
+    // إرسال طلب التوصيل وحفظ السلة كاملة
     if (saleType === 'delivery' && customer) {
       const itemsSummary = cart.map(i => `${i.productName} (${i.qtyInCart})`).join(' + ');
       await supabase.from('delivery_orders').insert({
         store_id: storeId,
-        cart_data: cart, // حفظ السلة لاستخدامها عند الاستلام
+        cart_data: cart, 
         customer_name: customer.name,
         phone: customer.phone,
         instagram: customer.instagram,
@@ -468,7 +468,7 @@ export default function POSPage() {
                   <MessageSquare size={18} /> رسالة للفاتورة
                 </button>
                 <button onClick={completeSale} disabled={cart.length === 0 || (sub.isExpired && !sub.isSuperAdmin)} className="flex-[1.5] flex items-center justify-center gap-2 h-14 bg-indigo-600 text-white rounded-2xl text-sm font-bold hover:bg-indigo-700 disabled:opacity-40 transition shadow-md shadow-indigo-200">
-                  <CheckCircle size={20} /> إتمام الطلب
+                  <CheckCircle size={20} /> إتمام الطلب والبيع
                 </button>
               </div>
             </div>
