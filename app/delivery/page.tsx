@@ -31,58 +31,62 @@ export default function DeliveryPage() {
     setLoading(false);
   }
 
-  // الدالة الذكية لتحديث الحالة ومعالجة المرتجعات
-  async function updateStatus(id: string, newStatus: string, saleId: string | null) {
+  // الدالة الذكية والمضمونة لتحديث الحالة ومعالجة المرتجعات
+  async function updateStatus(id: string, newStatus: string) {
     setUpdating(true);
     try {
-      // 1. تحديث الحالة في جدول التوصيل
+      // 1. تحديث الحالة في قاعدة البيانات
       const { error } = await supabase.from('delivery_orders').update({ status: newStatus }).eq('id', id);
+      if (error) throw error;
 
-      if (!error) {
-        setOrders(orders.map(o => o.id === id ? { ...o, status: newStatus } : o));
+      setOrders(orders.map(o => o.id === id ? { ...o, status: newStatus } : o));
 
-        // 2. هندسة الاسترجاع: إذا كان الطلب راجع، نقوم بمسح المبيعات وإرجاع المخزون
-        if (newStatus === 'returned' && saleId) {
-          
-          // أ) التحقق مما إذا كانت المبيعات لا تزال في الطابور المحلي (لم ترفع بعد)
-          const queuedSales = await db.sales_queue.filter(q => q.saleId === saleId).toArray();
-
-          if (queuedSales.length > 0) {
-            for (const sale of queuedSales) {
-              const variant = await db.product_variants.get(sale.variantId);
-              if (variant) {
-                await db.product_variants.update(sale.variantId, { quantity: variant.quantity + sale.quantitySold });
-              }
-              await db.sales_queue.delete(sale.id); // مسحها من الدرج
-            }
-          } else {
-            // ب) إذا كانت مرفوعة للسيرفر (Supabase) مسبقاً
-            const { data: serverSales } = await supabase.from('sales').select('*').eq('sale_id', saleId);
-            if (serverSales && serverSales.length > 0) {
-              for (const sale of serverSales) {
-                // إرجاع المخزون في السيرفر
-                const { data: variant } = await supabase.from('product_variants').select('quantity').eq('id', sale.variant_id).single();
-                if (variant) {
-                  await supabase.from('product_variants').update({ quantity: variant.quantity + sale.quantity_sold }).eq('id', sale.variant_id);
-                }
-                // تحديث المخزون محلياً أيضاً
-                const localVariant = await db.product_variants.get(sale.variant_id);
-                if (localVariant) {
-                  await db.product_variants.update(sale.variant_id, { quantity: localVariant.quantity + sale.quantity_sold });
-                }
-              }
-              // حذف عملية البيع من السيرفر (حتى تنقص من الأرباح الكلية)
-              await supabase.from('sales').delete().eq('sale_id', saleId);
-            }
-          }
-          alert('تم تسجيل الطلب كراجع ✅ \nتم مسح مبلغه من أرباح اليوم وتمت إعادة المنتجات للمخزون بنجاح.');
+      // 2. هندسة الاسترجاع الجذري
+      if (newStatus === 'returned') {
+        const order = orders.find(o => o.id === id);
+        
+        if (!order || !order.cart_data || !order.sales_ids) {
+          alert('⚠️ هذا الطلب قديم (قبل التحديث)، يرجى إرجاع مبلغه والقطع للمخزون يدوياً.');
+          setUpdating(false);
+          return;
         }
+
+        // أ) إرجاع الكميات للمخزون (محلياً وسيرفر)
+        const cartData = typeof order.cart_data === 'string' ? JSON.parse(order.cart_data) : order.cart_data;
+        
+        for (const item of cartData) {
+          // إرجاع للسيرفر
+          const { data: variantData } = await supabase.from('product_variants').select('quantity').eq('id', item.id).single();
+          if (variantData) {
+            await supabase.from('product_variants').update({ quantity: variantData.quantity + item.qtyInCart }).eq('id', item.id);
+          }
+          // إرجاع للمخزن المحلي
+          const localVariant = await db.product_variants.get(item.id);
+          if (localVariant) {
+            await db.product_variants.update(item.id, { quantity: localVariant.quantity + item.qtyInCart });
+          }
+        }
+
+        // ب) مسح المبيعات من الدرج (السيرفر والمحلي) لكي ينقص الربح الفعلي
+        const salesIds = typeof order.sales_ids === 'string' ? JSON.parse(order.sales_ids) : order.sales_ids;
+        if (salesIds && salesIds.length > 0) {
+          // مسح من السيرفر
+          await supabase.from('sales').delete().in('id', salesIds);
+          
+          // مسح من الطابور المحلي (في حال انقطع النت ولم تُرفع بعد)
+          for (const sId of salesIds) {
+            await db.sales_queue.delete(sId);
+          }
+        }
+
+        alert('تم تسجيل الطلب كراجع ✅\nتم إرجاع القطع للمخزون وخصم المبلغ من أرباح اليوم بنجاح.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('حدث خطأ أثناء التحديث');
+      alert('حدث خطأ أثناء التحديث: ' + err.message);
+    } finally {
+      setUpdating(false);
     }
-    setUpdating(false);
   }
 
   const pendingOrders = orders.filter(o => o.status === 'pending');
@@ -112,7 +116,7 @@ export default function DeliveryPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             
-            {/* عمود: قيد التوصيل */}
+            {/* قيد التوصيل */}
             <div className="space-y-4">
               <h2 className="font-bold text-gray-700 flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-lg w-fit text-sm">
                 <Clock size={16} /> قيد التوصيل ({pendingOrders.length})
@@ -123,17 +127,17 @@ export default function DeliveryPage() {
               {pendingOrders.length === 0 && <p className="text-xs text-gray-400">لا توجد طلبات قيد التوصيل</p>}
             </div>
 
-            {/* عمود: تم الاستلام */}
+            {/* تم الاستلام */}
             <div className="space-y-4">
               <h2 className="font-bold text-gray-700 flex items-center gap-1.5 bg-emerald-100 text-emerald-800 px-3 py-1.5 rounded-lg w-fit text-sm">
-                <CheckCircle2 size={16} /> تم الاستلام والدفع ({completedOrders.length})
+                <CheckCircle2 size={16} /> تم الاستلام ({completedOrders.length})
               </h2>
               {completedOrders.map(order => (
                 <OrderCard key={order.id} order={order} onUpdate={updateStatus} updating={updating} />
               ))}
             </div>
 
-            {/* عمود: راجع */}
+            {/* راجع */}
             <div className="space-y-4">
               <h2 className="font-bold text-gray-700 flex items-center gap-1.5 bg-red-100 text-red-800 px-3 py-1.5 rounded-lg w-fit text-sm">
                 <XCircle size={16} /> راجع / ملغى ({returnedOrders.length})
@@ -172,10 +176,10 @@ function OrderCard({ order, onUpdate, updating }: { order: any, onUpdate: any, u
 
       {order.status === 'pending' && (
         <div className="flex gap-2 pt-2">
-          <button disabled={updating} onClick={() => onUpdate(order.id, 'completed', order.sale_id)} className="flex-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white disabled:opacity-50 border border-emerald-200 rounded-xl py-2 text-xs font-bold transition flex justify-center items-center gap-1">
-            <CheckCircle2 size={14} /> تم الاستلام
+          <button disabled={updating} onClick={() => onUpdate(order.id, 'completed')} className="flex-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white disabled:opacity-50 border border-emerald-200 rounded-xl py-2 text-xs font-bold transition flex justify-center items-center gap-1">
+            <CheckCircle2 size={14} /> استلام
           </button>
-          <button disabled={updating} onClick={() => onUpdate(order.id, 'returned', order.sale_id)} className="flex-1 bg-red-50 text-red-700 hover:bg-red-600 hover:text-white disabled:opacity-50 border border-red-200 rounded-xl py-2 text-xs font-bold transition flex justify-center items-center gap-1">
+          <button disabled={updating} onClick={() => onUpdate(order.id, 'returned')} className="flex-1 bg-red-50 text-red-700 hover:bg-red-600 hover:text-white disabled:opacity-50 border border-red-200 rounded-xl py-2 text-xs font-bold transition flex justify-center items-center gap-1">
             <XCircle size={14} /> راجع
           </button>
         </div>
