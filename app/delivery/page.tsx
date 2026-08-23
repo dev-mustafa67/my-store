@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import NavBar from '@/components/NavBar';
 import { supabase } from '@/lib/supabase-client';
 import { db } from '@/lib/offline-db';
+import { syncQueue } from '@/lib/sync-queue';
 import { Truck, CheckCircle2, XCircle, Clock, MapPin, Instagram, Phone, Package } from 'lucide-react';
 
 export default function DeliveryPage() {
@@ -31,56 +32,68 @@ export default function DeliveryPage() {
     setLoading(false);
   }
 
-  // الدالة الذكية والمضمونة لتحديث الحالة ومعالجة المرتجعات
   async function updateStatus(id: string, newStatus: string) {
     setUpdating(true);
     try {
-      // 1. تحديث الحالة في قاعدة البيانات
       const { error } = await supabase.from('delivery_orders').update({ status: newStatus }).eq('id', id);
       if (error) throw error;
 
       setOrders(orders.map(o => o.id === id ? { ...o, status: newStatus } : o));
+      const order = orders.find(o => o.id === id);
 
-      // 2. هندسة الاسترجاع الجذري
-      if (newStatus === 'returned') {
-        const order = orders.find(o => o.id === id);
-        
-        if (!order || !order.cart_data || !order.sales_ids) {
-          alert('⚠️ هذا الطلب قديم (قبل التحديث)، يرجى إرجاع مبلغه والقطع للمخزون يدوياً.');
-          setUpdating(false);
-          return;
-        }
+      if (!order || !order.cart_data) {
+        alert('⚠️ هذا الطلب قديم، يرجى تسويته يدوياً.');
+        setUpdating(false);
+        return;
+      }
+      
+      const cartData = typeof order.cart_data === 'string' ? JSON.parse(order.cart_data) : order.cart_data;
 
-        // أ) إرجاع الكميات للمخزون (محلياً وسيرفر)
-        const cartData = typeof order.cart_data === 'string' ? JSON.parse(order.cart_data) : order.cart_data;
-        
+      // 1. عند إتمام الطلب: نسجل المبيعات لتدخل الدرج اليوم! 💵
+      if (newStatus === 'completed') {
+        const saleId = crypto.randomUUID();
+        const now = new Date().toISOString();
+
         for (const item of cartData) {
-          // إرجاع للسيرفر
-          const { data: variantData } = await supabase.from('product_variants').select('quantity').eq('id', item.id).single();
-          if (variantData) {
-            await supabase.from('product_variants').update({ quantity: variantData.quantity + item.qtyInCart }).eq('id', item.id);
-          }
-          // إرجاع للمخزن المحلي
+          await db.sales_queue.add({
+            id: crypto.randomUUID(),
+            saleId,
+            storeId: order.store_id,
+            variantId: item.id,
+            quantitySold: item.qtyInCart,
+            salePriceAtTime: item.salePrice,
+            costPriceAtTime: item.costPrice,
+            soldAt: now,
+            synced: false,
+            syncAttempts: 0,
+            customerId: null,
+            onCredit: false,
+          } as any);
+        }
+        
+        if (navigator.onLine) syncQueue(order.store_id);
+        alert('تم الاستلام! تمت إضافة المبلغ لأرباح اليوم بنجاح ✅💵');
+      }
+
+      // 2. عند إرجاع الطلب: نرجع المخزون فقط! 📦 (لم تسجل مبيعات أصلاً)
+      if (newStatus === 'returned') {
+        for (const item of cartData) {
+          // إرجاع للمخزون المحلي
           const localVariant = await db.product_variants.get(item.id);
           if (localVariant) {
             await db.product_variants.update(item.id, { quantity: localVariant.quantity + item.qtyInCart });
           }
-        }
-
-        // ب) مسح المبيعات من الدرج (السيرفر والمحلي) لكي ينقص الربح الفعلي
-        const salesIds = typeof order.sales_ids === 'string' ? JSON.parse(order.sales_ids) : order.sales_ids;
-        if (salesIds && salesIds.length > 0) {
-          // مسح من السيرفر
-          await supabase.from('sales').delete().in('id', salesIds);
-          
-          // مسح من الطابور المحلي (في حال انقطع النت ولم تُرفع بعد)
-          for (const sId of salesIds) {
-            await db.sales_queue.delete(sId);
+          // إرجاع للسيرفر
+          if (navigator.onLine) {
+            const { data: vData } = await supabase.from('product_variants').select('quantity').eq('id', item.id).single();
+            if (vData) {
+              await supabase.from('product_variants').update({ quantity: vData.quantity + item.qtyInCart }).eq('id', item.id);
+            }
           }
         }
-
-        alert('تم تسجيل الطلب كراجع ✅\nتم إرجاع القطع للمخزون وخصم المبلغ من أرباح اليوم بنجاح.');
+        alert('تم تسجيل الطلب كراجع وإعادة المنتجات للمخزون ✅📦');
       }
+
     } catch (err: any) {
       console.error(err);
       alert('حدث خطأ أثناء التحديث: ' + err.message);
@@ -116,7 +129,6 @@ export default function DeliveryPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             
-            {/* قيد التوصيل */}
             <div className="space-y-4">
               <h2 className="font-bold text-gray-700 flex items-center gap-1.5 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-lg w-fit text-sm">
                 <Clock size={16} /> قيد التوصيل ({pendingOrders.length})
@@ -127,7 +139,6 @@ export default function DeliveryPage() {
               {pendingOrders.length === 0 && <p className="text-xs text-gray-400">لا توجد طلبات قيد التوصيل</p>}
             </div>
 
-            {/* تم الاستلام */}
             <div className="space-y-4">
               <h2 className="font-bold text-gray-700 flex items-center gap-1.5 bg-emerald-100 text-emerald-800 px-3 py-1.5 rounded-lg w-fit text-sm">
                 <CheckCircle2 size={16} /> تم الاستلام ({completedOrders.length})
@@ -137,7 +148,6 @@ export default function DeliveryPage() {
               ))}
             </div>
 
-            {/* راجع */}
             <div className="space-y-4">
               <h2 className="font-bold text-gray-700 flex items-center gap-1.5 bg-red-100 text-red-800 px-3 py-1.5 rounded-lg w-fit text-sm">
                 <XCircle size={16} /> راجع / ملغى ({returnedOrders.length})
