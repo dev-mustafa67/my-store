@@ -34,7 +34,6 @@ export default function POSPage() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState('');
   
-  // حالة نوع البيع: مباشر، دين، أو توصيل
   const [saleType, setSaleType] = useState<'cash' | 'credit' | 'delivery'>('cash');
   
   const [heldOrders, setHeldOrders] = useState<{ id: string; cart: any[]; time: string; customer: string }[]>([]);
@@ -42,7 +41,6 @@ export default function POSPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const barcodeRef = useRef<HTMLInputElement>(null);
 
-  // حالة نافذة إضافة زبون انستا/توصيل
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [newCust, setNewCust] = useState({ name: '', phone: '', instagram: '', location: '' });
   const [addingCust, setAddingCust] = useState(false);
@@ -124,7 +122,6 @@ export default function POSPage() {
     setHeldOrders(prev => prev.filter(o => o.id !== orderId));
   }
 
-  // إضافة زبون جديد سريع (انستا / توصيل)
   async function handleAddCustomer(e: React.FormEvent) {
     e.preventDefault();
     if (!newCust.name.trim() || !storeId) return;
@@ -155,41 +152,31 @@ export default function POSPage() {
 
   function sendWhatsAppReceipt() {
     const cust = customers.find((c) => c.id === selectedCustomer);
-    
-    // إذا لم يتم تحديد زبون، نطلب رقم فقط
     if (!cust) {
       const manualPhone = prompt('أدخل رقم هاتف الزبون لإرسال الفاتورة عبر الواتساب:');
       if (!manualPhone) return;
       generateWhatsAppURL(manualPhone, null);
       return;
     }
-    
-    // إذا تم تحديد زبون، نرسل التفاصيل كاملة
     const phoneToUse = cust.phone || prompt('الزبون ليس لديه رقم مسجل، يرجى إدخال رقمه:');
     if (!phoneToUse) return;
-    
     generateWhatsAppURL(phoneToUse, cust);
   }
 
   function generateWhatsAppURL(phone: string, custDetails: any) {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
-    let text = `*📦 تفاصيل الطلب / الفاتورة*\n`;
-    text += `----------------------\n`;
-    
+    let text = `*📦 تفاصيل الطلب / الفاتورة*\n----------------------\n`;
     if (custDetails) {
       text += `👤 *الاسم:* ${custDetails.name}\n`;
       if (custDetails.phone) text += `📞 *الهاتف:* ${custDetails.phone}\n`;
       if (custDetails.location) text += `📍 *العنوان:* ${custDetails.location}\n`;
-      if (custDetails.instagram) text += `📱 *حساب الانستا:* ${custDetails.instagram}\n`;
-      text += `----------------------\n`;
+      if (custDetails.instagram) text += `📱 *حساب الانستا:* ${custDetails.instagram}\n----------------------\n`;
     }
-
     text += `*🛒 المنتجات:*\n`;
     cart.forEach((i) => {
       text += `▪️ ${i.productName} (${i.color || ''}/${i.size || ''}) × ${i.qtyInCart} = ${(i.salePrice * i.qtyInCart).toLocaleString()} د.ع\n`;
     });
     text += `----------------------\n*💰 الإجمالي الكلي:* ${total.toLocaleString()} د.ع\nشكراً لتعاملكم معنا! 🙏`;
-    
     window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`, '_blank');
   }
 
@@ -209,35 +196,37 @@ export default function POSPage() {
     const saleId = crypto.randomUUID();
     const now = new Date().toISOString();
     const customer = customers.find((c) => c.id === selectedCustomer);
-    
-    // مصفوفة لحفظ أرقام المبيعات لتسهيل مسحها إذا رجع الطلب
-    const generatedSaleIds: string[] = [];
 
     for (const item of cart) {
-      const uniqueSaleId = crypto.randomUUID();
-      generatedSaleIds.push(uniqueSaleId);
-
-      await db.sales_queue.add({
-        id: uniqueSaleId,
-        saleId,
-        storeId,
-        variantId: item.id,
-        quantitySold: item.qtyInCart,
-        salePriceAtTime: item.salePrice,
-        costPriceAtTime: item.costPrice,
-        soldAt: now,
-        synced: false,
-        syncAttempts: 0,
-        customerId: selectedCustomer || null,
-        onCredit: saleType === 'credit',
-      } as any);
+      // إذا كان الخيار "كاش" أو "دين"، سجل المبيعات فوراً لتدخل الأرباح
+      if (saleType !== 'delivery') {
+        await db.sales_queue.add({
+          id: crypto.randomUUID(),
+          saleId,
+          storeId,
+          variantId: item.id,
+          quantitySold: item.qtyInCart,
+          salePriceAtTime: item.salePrice,
+          costPriceAtTime: item.costPrice,
+          soldAt: now,
+          synced: false,
+          syncAttempts: 0,
+          customerId: selectedCustomer || null,
+          onCredit: saleType === 'credit',
+        } as any);
+      }
       
+      // للمبيعات والتوصيل: اسحب البضاعة من المخزون المحلي
       await db.product_variants.update(item.id, {
         quantity: item.quantity - item.qtyInCart,
         lastSoldAt: now,
       });
 
-      // تسجيل في دفتر الديون إذا كان البيع آجل
+      // وللتوصيل بالذات: حدث المخزون في السيرفر فوراً لكي لا تنباع لشخص آخر
+      if (navigator.onLine) {
+        supabase.from('product_variants').update({ quantity: item.quantity - item.qtyInCart }).eq('id', item.id).then();
+      }
+
       if (saleType === 'credit' && customer) {
         await supabase.from('debts').insert({
           store_id: storeId,
@@ -250,14 +239,12 @@ export default function POSPage() {
       }
     }
 
-    // إرسال الطلب لجدول التوصيل مع حفظ السلة بالكامل للاسترجاع الذكي 🚚
+    // إرسال الطلب لجدول التوصيل (بدون تسجيل مبيعات)
     if (saleType === 'delivery' && customer) {
       const itemsSummary = cart.map(i => `${i.productName} (${i.qtyInCart})`).join(' + ');
       await supabase.from('delivery_orders').insert({
         store_id: storeId,
-        sale_id: saleId, 
-        sales_ids: generatedSaleIds, // حفظ الأرقام لمسحها لاحقاً
-        cart_data: cart, // حفظ السلة لإرجاع المخزون
+        cart_data: cart, // حفظ السلة لاستخدامها عند الاستلام
         customer_name: customer.name,
         phone: customer.phone,
         instagram: customer.instagram,
@@ -300,7 +287,6 @@ export default function POSPage() {
         </div>
       )}
 
-      {/* نافذة إضافة زبون جديد سريعة */}
       {showAddCustomer && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
@@ -378,7 +364,6 @@ export default function POSPage() {
           </div>
         )}
 
-        {/* قسم اختيار الزبون ونوع البيع */}
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5 flex flex-col gap-4">
           <div className="flex w-full gap-2">
             <select
@@ -397,7 +382,6 @@ export default function POSPage() {
             </button>
           </div>
           
-          {/* خيارات نوع البيع */}
           <div className="flex gap-2 flex-wrap">
             <label className={`flex-1 flex items-center justify-center gap-2 text-xs font-bold px-3 h-11 rounded-2xl cursor-pointer border transition-all ${saleType === 'cash' ? 'bg-emerald-50 border-emerald-500 text-emerald-800 shadow-sm' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}>
               <input type="radio" name="saleType" checked={saleType === 'cash'} onChange={() => setSaleType('cash')} className="hidden" />
@@ -415,7 +399,6 @@ export default function POSPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* قائمة المنتجات */}
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
             <div className="flex justify-between items-center mb-5">
               <h2 className="text-lg font-black text-gray-800">المنتجات</h2>
@@ -442,7 +425,6 @@ export default function POSPage() {
             </div>
           </div>
 
-          {/* سلة المشتريات */}
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5 flex flex-col justify-between">
             <div>
               <div className="flex justify-between items-center mb-5">
@@ -486,7 +468,7 @@ export default function POSPage() {
                   <MessageSquare size={18} /> رسالة للفاتورة
                 </button>
                 <button onClick={completeSale} disabled={cart.length === 0 || (sub.isExpired && !sub.isSuperAdmin)} className="flex-[1.5] flex items-center justify-center gap-2 h-14 bg-indigo-600 text-white rounded-2xl text-sm font-bold hover:bg-indigo-700 disabled:opacity-40 transition shadow-md shadow-indigo-200">
-                  <CheckCircle size={20} /> إتمام الطلب والبيع
+                  <CheckCircle size={20} /> إتمام الطلب
                 </button>
               </div>
             </div>
