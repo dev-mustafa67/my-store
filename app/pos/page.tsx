@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase-client';
 import { db } from '@/lib/offline-db';
 import { syncQueue, initAutoSync } from '@/lib/sync-queue';
 import { useSubscription } from '@/lib/subscription';
-import { CheckCircle, Trash2, PauseCircle, PlayCircle, Barcode, MessageSquare, Search, Lock, Plus, X, MapPin, Instagram, User, Phone } from 'lucide-react';
+import { CheckCircle, Trash2, PauseCircle, PlayCircle, Barcode, MessageSquare, Search, Lock, Plus, X, MapPin, Instagram, User, Phone, Receipt } from 'lucide-react';
 
 export default function POSPage() {
   const sub = useSubscription();
