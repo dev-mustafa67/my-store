@@ -198,7 +198,6 @@ export default function POSPage() {
   }
 
   async function completeSale() {
-   async function completeSale() {
     if (sub.isExpired && !sub.isSuperAdmin) return;
     if (!storeId) return;
     
@@ -238,6 +237,7 @@ export default function POSPage() {
         lastSoldAt: now,
       });
 
+      // تسجيل في دفتر الديون إذا كان البيع آجل
       if (saleType === 'credit' && customer) {
         await supabase.from('debts').insert({
           store_id: storeId,
