@@ -244,11 +244,12 @@ export default function POSPage() {
       }
     }
 
-    // إرسال الطلب لجدول التوصيل إذا كان الخيار توصيل 🚚
+    // إرسال الطلب لجدول التوصيل إذا كان الخيار توصيل 🚚 مع ربطه بـ sale_id لتمكين الإرجاع
     if (saleType === 'delivery' && customer) {
       const itemsSummary = cart.map(i => `${i.productName} (${i.qtyInCart})`).join(' + ');
       await supabase.from('delivery_orders').insert({
         store_id: storeId,
+        sale_id: saleId, 
         customer_name: customer.name,
         phone: customer.phone,
         instagram: customer.instagram,
