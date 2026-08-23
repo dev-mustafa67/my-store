@@ -1,12 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase-client';
-import { useUserRole } from '@/lib/permissions';
 import { useSubscription } from '@/lib/subscription';
-import { db } from '@/lib/offline-db'; // استيراد قاعدة البيانات المحلية لمسحها
 import { 
   Package, 
   Receipt, 
@@ -16,21 +14,48 @@ import {
   CreditCard, 
   Shield, 
   LogOut, 
-  Shirt, 
-  Lock, 
-  AlertTriangle,
-  Clock
+  Truck,
+  Menu,
+  X,
+  Store
 } from 'lucide-react';
 
 export default function NavBar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { isOwner } = useUserRole();
   const sub = useSubscription();
+  
+  const [isOpen, setIsOpen] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
 
+  useEffect(() => {
+    async function checkRole() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from('users_profile')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        
+        if (data?.role === 'owner') {
+          setIsOwner(true);
+        }
+      }
+    }
+    checkRole();
+  }, []);
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push('/login');
+  }
+
+  // قائمة الروابط الديناميكية
   const links = [
     { href: '/products', label: 'المنتجات', icon: Package },
     { href: '/pos', label: 'الكاشير', icon: Receipt },
+    { href: '/delivery', label: 'التوصيل', icon: Truck }, // إضافة قسم التوصيل هنا 🚚
     { href: '/debts', label: 'الديون', icon: BookText },
     { href: '/customers', label: 'الزبائن', icon: Users },
     { href: '/analytics', label: 'التحليلات', icon: BarChart3 },
@@ -38,130 +63,93 @@ export default function NavBar() {
     ...(sub.isSuperAdmin ? [{ href: '/admin', label: 'إدارة المنصة', icon: Shield }] : []),
   ];
 
-  useEffect(() => {
-    if (!sub.loading && sub.isExpired && !sub.isSuperAdmin) {
-      if (pathname !== '/billing' && pathname !== '/login' && pathname !== '/signup') {
-        router.replace('/billing');
-      }
-    }
-  }, [sub.loading, sub.isExpired, sub.isSuperAdmin, pathname, router]);
-
-  // تحديث دالة تسجيل الخروج لمسح تداخل البيانات
-  async function logout() {
-    try {
-      // 1. مسح الذاكرة المحلية للكاشير (الأوفلاين) بالكامل لمنع تداخل المنتجات بين الحسابات
-      await db.product_variants.clear();
-      await db.sales_queue.clear();
-      localStorage.clear();
-    } catch (err) {
-      console.error('Error clearing local database:', err);
-    }
-    
-    // 2. تسجيل الخروج من النظام السحابي
-    await supabase.auth.signOut();
-    router.push('/login');
-  }
-
-  const showWarningBanner =
-    !sub.loading &&
-    !sub.isExpired &&
-    sub.daysLeft !== null &&
-    sub.daysLeft <= 3 &&
-    sub.daysLeft > 0;
-
-  const isLockedOut = !sub.loading && sub.isExpired && !sub.isSuperAdmin;
-
   return (
-    <>
-      <nav dir="rtl" className="bg-gradient-to-l from-slate-900 to-indigo-950 text-white shadow-lg print:hidden">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center flex-wrap gap-3">
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center">
-              <Shirt size={18} />
+    <nav className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-40">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between h-16">
+          
+          {/* الشعار وروابط الشاشات الكبيرة */}
+          <div className="flex items-center gap-6 lg:gap-8">
+            <Link href="/" className="flex items-center gap-2 text-indigo-600">
+              <Store size={28} />
+              <span className="font-black text-xl tracking-tight text-gray-900">الكاشير</span>
+            </Link>
+            
+            <div className="hidden md:flex items-center gap-1.5">
+              {links.map((link) => {
+                const Icon = link.icon;
+                const isActive = pathname === link.href;
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold transition-all ${
+                      isActive 
+                        ? 'bg-indigo-50 text-indigo-700' 
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-indigo-600'
+                    }`}
+                  >
+                    <Icon size={18} />
+                    <span>{link.label}</span>
+                  </Link>
+                );
+              })}
             </div>
-            <span className="font-bold text-sm hidden sm:inline">إدارة المحل</span>
           </div>
 
-          <div className="flex gap-1 flex-wrap">
-            {links.map((l) => {
-              const isBlocked = isLockedOut && l.href !== '/billing';
+          {/* زر تسجيل الخروج وقائمة الهاتف */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleLogout}
+              className="hidden md:flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50 rounded-xl transition-all"
+            >
+              <LogOut size={18} />
+              <span>خروج</span>
+            </button>
 
-              return (
-                <Link
-                  key={l.href}
-                  href={isBlocked ? '/billing' : l.href}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
-                    pathname === l.href 
-                      ? 'bg-indigo-600 text-white' 
-                      : isBlocked
-                      ? 'text-slate-600 opacity-40 cursor-not-allowed'
-                      : 'text-slate-300 hover:bg-white/10'
-                  }`}
-                >
-                  <l.icon size={15} />
-                  <span className="hidden sm:inline">{l.label}</span>
-                  {isBlocked && <Lock size={10} className="text-red-400" />}
-                </Link>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            {isOwner && <span className="bg-indigo-500/30 border border-indigo-400/40 px-2.5 py-1 rounded-full text-[11px] font-bold">مالك</span>}
-            <button onClick={logout} className="flex items-center gap-1 text-slate-300 hover:text-white text-xs">
-              <LogOut size={14} />
-              <span className="hidden sm:inline">خروج</span>
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-xl transition"
+            >
+              {isOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
           </div>
         </div>
-      </nav>
+      </div>
 
-      {showWarningBanner && (
-        <div dir="rtl" className="bg-amber-500 text-slate-950 px-4 py-2 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-sm print:hidden">
-          <AlertTriangle size={16} />
-          <span>
-            تنبيه: متبقٍ {sub.daysLeft} {sub.daysLeft === 1 ? 'يوم واحد' : 'أيام'} على انتهاء فترة اشتراكك!
-          </span>
-          <Link href="/billing" className="underline mr-2 bg-black/10 px-2 py-0.5 rounded hover:bg-black/20">
-            تجديد الاشتراك الآن
-          </Link>
-        </div>
-      )}
-
-      {isLockedOut && pathname !== '/billing' && (
-        <div dir="rtl" className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[999999] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full text-center space-y-4 shadow-2xl">
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto ${sub.status === 'pending_payment' ? 'bg-amber-100 text-amber-600' : 'bg-red-100 text-red-600'}`}>
-              {sub.status === 'pending_payment' ? <Clock size={32} /> : <Lock size={32} />}
-            </div>
-            
-            <h2 className="text-xl font-bold text-gray-900">
-              {sub.status === 'pending_payment' ? 'الطلب قيد المراجعة' : 'انتهى اشتراك المتجر'}
-            </h2>
-            
-            <p className="text-xs sm:text-sm text-gray-500 leading-relaxed">
-              {sub.status === 'pending_payment'
-                ? 'تم إرسال طلب التحويل إلى الإدارة. سيبقى النظام مقفلاً حتى يتم تفعيل المتجر ومطابقة الحساب.'
-                : 'لقد انتهت فترة الاستخدام المتاحة. تم قفل جميع أقسام النظام حتى يتم دفع رسوم الاشتراك وتجديده.'}
-            </p>
-
-            <div className="pt-2 flex flex-col gap-2">
-              <Link
-                href="/billing"
-                className="w-full h-11 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center justify-center hover:bg-indigo-700 transition shadow-lg shadow-indigo-100"
-              >
-                الذهاب لصفحة الدفع والتجديد
-              </Link>
-              <button
-                onClick={logout}
-                className="w-full h-10 text-gray-500 text-xs font-semibold hover:text-gray-700"
-              >
-                تسجيل الخروج
-              </button>
-            </div>
+      {/* القائمة المنسدلة للهاتف (Mobile Menu) */}
+      {isOpen && (
+        <div className="md:hidden border-t border-gray-100 bg-white">
+          <div className="px-4 pt-2 pb-4 space-y-1">
+            {links.map((link) => {
+              const Icon = link.icon;
+              const isActive = pathname === link.href;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setIsOpen(false)}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
+                    isActive 
+                      ? 'bg-indigo-50 text-indigo-700' 
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-indigo-600'
+                  }`}
+                >
+                  <Icon size={20} />
+                  <span>{link.label}</span>
+                </Link>
+              );
+            })}
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-4 py-3 mt-2 rounded-xl text-sm font-bold text-red-600 hover:bg-red-50 transition-all"
+            >
+              <LogOut size={20} />
+              <span>تسجيل خروج</span>
+            </button>
           </div>
         </div>
       )}
-    </>
+    </nav>
   );
 }
