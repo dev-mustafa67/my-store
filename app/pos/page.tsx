@@ -198,16 +198,17 @@ export default function POSPage() {
     const customer = customers.find((c) => c.id === selectedCustomer);
 
     for (const item of cart) {
-      // إذا لم يكن توصيل، نسجله كمبيعات فوراً ليدخل في الأرباح
+      const qty = Number(item.qtyInCart);
+
       if (saleType !== 'delivery') {
         await db.sales_queue.add({
           id: crypto.randomUUID(),
           saleId,
           storeId,
           variantId: item.id,
-          quantitySold: item.qtyInCart,
-          salePriceAtTime: item.salePrice,
-          costPriceAtTime: item.costPrice,
+          quantitySold: qty,
+          salePriceAtTime: Number(item.salePrice),
+          costPriceAtTime: Number(item.costPrice),
           soldAt: now,
           synced: false,
           syncAttempts: 0,
@@ -216,15 +217,15 @@ export default function POSPage() {
         } as any);
       }
       
-      // نخصم البضاعة محلياً لكي ينقص المخزون في الكاشير
+      // خصم المخزون المحلي
       await db.product_variants.update(item.id, {
-        quantity: item.quantity - item.qtyInCart,
+        quantity: Number(item.quantity) - qty,
         lastSoldAt: now,
       });
 
-      // خدعة التوصيل: نخصمه من السيرفر يدوياً لكي "يُحجز" ولا ينباع لغيره
+      // حجز بضاعة التوصيل في السيرفر
       if (saleType === 'delivery' && navigator.onLine) {
-        supabase.from('product_variants').update({ quantity: item.quantity - item.qtyInCart }).eq('id', item.id).then();
+        await supabase.from('product_variants').update({ quantity: Number(item.quantity) - qty }).eq('id', item.id);
       }
 
       if (saleType === 'credit' && customer) {
@@ -233,13 +234,12 @@ export default function POSPage() {
           customer_id: customer.id,
           customer_name: customer.name,
           customer_phone: customer.phone || null,
-          amount: item.salePrice * item.qtyInCart,
+          amount: Number(item.salePrice) * qty,
           note: `بيع بالدين: ${item.productName}`,
         });
       }
     }
 
-    // إرسال طلب التوصيل وحفظ السلة كاملة
     if (saleType === 'delivery' && customer) {
       const itemsSummary = cart.map(i => `${i.productName} (${i.qtyInCart})`).join(' + ');
       await supabase.from('delivery_orders').insert({
@@ -267,7 +267,7 @@ export default function POSPage() {
     if (navigator.onLine) syncQueue(storeId);
   }
 
-  const total = cart.reduce((s, i) => s + i.salePrice * i.qtyInCart, 0);
+  const total = cart.reduce((s, i) => s + (Number(i.salePrice) * Number(i.qtyInCart)), 0);
   const filteredProducts = products.filter(p => p.productName?.toLowerCase().includes(searchQuery.toLowerCase()) || p.barcode?.includes(searchQuery));
 
   return (
@@ -440,10 +440,10 @@ export default function POSPage() {
                   <div key={i.id} className="flex justify-between items-center p-3 border border-gray-100 rounded-2xl bg-gray-50/50 text-sm">
                     <div>
                       <p className="font-bold text-gray-900">{i.productName}</p>
-                      <p className="text-xs text-gray-500 mt-1">{i.salePrice.toLocaleString()} د.ع × {i.qtyInCart}</p>
+                      <p className="text-xs text-gray-500 mt-1">{Number(i.salePrice).toLocaleString()} د.ع × {i.qtyInCart}</p>
                     </div>
                     <div className="flex items-center gap-4">
-                      <span className="font-black text-indigo-600">{(i.salePrice * i.qtyInCart).toLocaleString()}</span>
+                      <span className="font-black text-indigo-600">{(Number(i.salePrice) * Number(i.qtyInCart)).toLocaleString()}</span>
                       <button onClick={() => removeFromCart(i.id)} className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded-xl transition"><Trash2 size={18} /></button>
                     </div>
                   </div>
