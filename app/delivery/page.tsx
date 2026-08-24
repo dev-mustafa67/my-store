@@ -33,36 +33,51 @@ export default function DeliveryPage() {
   }
 
   async function updateStatus(id: string, newStatus: string) {
+    if (updating) return; // حماية من النقر المزدوج السريع
     setUpdating(true);
+    
     try {
       const { error } = await supabase.from('delivery_orders').update({ status: newStatus }).eq('id', id);
       if (error) throw error;
 
-      setOrders(orders.map(o => o.id === id ? { ...o, status: newStatus } : o));
       const order = orders.find(o => o.id === id);
-
       if (!order || !order.cart_data) {
-        alert('⚠️ هذا الطلب قديم، يرجى تسويته يدوياً.');
+        alert('⚠️ هذا الطلب قديم، يرجى تسويته يدوياً من المخزن.');
         setUpdating(false);
         return;
       }
       
       const cartData = typeof order.cart_data === 'string' ? JSON.parse(order.cart_data) : order.cart_data;
 
-      // 1. عند إتمام الطلب: نسجل المبيعات لتدخل الدرج اليوم! 💵
+      // 1. عند إتمام الطلب (الاستلام - دخول الأرباح للدرج)
       if (newStatus === 'completed') {
         const saleId = crypto.randomUUID();
         const now = new Date().toISOString();
 
         for (const item of cartData) {
+          const qty = Number(item.qtyInCart);
+
+          // معادلة التصحيح: نرجع الكمية المحجوزة برمجياً لتجنب الخصم المزدوج
+          const localVariant = await db.product_variants.get(item.id);
+          if (localVariant) {
+            await db.product_variants.update(item.id, { quantity: Number(localVariant.quantity) + qty });
+          }
+          if (navigator.onLine) {
+            const { data: vData } = await supabase.from('product_variants').select('quantity').eq('id', item.id).single();
+            if (vData) {
+              await supabase.from('product_variants').update({ quantity: Number(vData.quantity) + qty }).eq('id', item.id);
+            }
+          }
+
+          // تسجيل المبيعات لتدخل الدرج (النظام سيخصمها مرة واحدة فقط بشكل صحيح)
           await db.sales_queue.add({
             id: crypto.randomUUID(),
             saleId,
             storeId: order.store_id,
             variantId: item.id,
-            quantitySold: item.qtyInCart,
-            salePriceAtTime: item.salePrice,
-            costPriceAtTime: item.costPrice,
+            quantitySold: qty,
+            salePriceAtTime: Number(item.salePrice),
+            costPriceAtTime: Number(item.costPrice),
             soldAt: now,
             synced: false,
             syncAttempts: 0,
@@ -71,27 +86,31 @@ export default function DeliveryPage() {
           } as any);
         }
         
-        if (navigator.onLine) syncQueue(order.store_id);
-        alert('تم الاستلام! تمت إضافة المبلغ لأرباح اليوم بنجاح ✅💵');
+        if (navigator.onLine) {
+          setTimeout(() => syncQueue(order.store_id), 1000);
+        }
+        setOrders(orders.map(o => o.id === id ? { ...o, status: newStatus } : o));
+        alert('تم الاستلام! 💰 تمت إضافة الأرباح للدرج وتم ضبط المخزون بدقة.');
       }
 
-      // 2. عند إرجاع الطلب: نرجع المخزون فقط! 📦 (لم تسجل مبيعات أصلاً)
-      if (newStatus === 'returned') {
+      // 2. عند إرجاع الطلب (راجع)
+      else if (newStatus === 'returned') {
         for (const item of cartData) {
-          // إرجاع للمخزون المحلي
+          const qty = Number(item.qtyInCart);
+          
           const localVariant = await db.product_variants.get(item.id);
           if (localVariant) {
-            await db.product_variants.update(item.id, { quantity: localVariant.quantity + item.qtyInCart });
+            await db.product_variants.update(item.id, { quantity: Number(localVariant.quantity) + qty });
           }
-          // إرجاع للسيرفر
           if (navigator.onLine) {
             const { data: vData } = await supabase.from('product_variants').select('quantity').eq('id', item.id).single();
             if (vData) {
-              await supabase.from('product_variants').update({ quantity: vData.quantity + item.qtyInCart }).eq('id', item.id);
+              await supabase.from('product_variants').update({ quantity: Number(vData.quantity) + qty }).eq('id', item.id);
             }
           }
         }
-        alert('تم تسجيل الطلب كراجع وإعادة المنتجات للمخزون ✅📦');
+        setOrders(orders.map(o => o.id === id ? { ...o, status: newStatus } : o));
+        alert('تم تسجيل الطلب كراجع ✅ تمت إعادة البضاعة للمخزون ولم يتم احتساب أرباح.');
       }
 
     } catch (err: any) {
