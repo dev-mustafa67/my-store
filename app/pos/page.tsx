@@ -75,14 +75,17 @@ export default function POSPage() {
       if (serverVariants && isMounted) {
         const formatted = serverVariants.map((v: any) => ({
           id: v.id,
+          productId: v.product_id || v.products?.id || '',
           productName: v.products?.name || 'منتج',
-          color: v.color,
-          size: v.size,
-          quantity: v.quantity,
-          costPrice: v.cost_price,
-          salePrice: v.sale_price,
-          barcode: v.barcode,
+          color: v.color || '',
+          size: v.size || '',
+          quantity: Number(v.quantity) || 0,
+          costPrice: Number(v.cost_price) || 0,
+          salePrice: Number(v.sale_price) || 0,
+          barcode: v.barcode || '',
           store_id: currentStore,
+          lastSoldAt: null,
+          updatedAt: new Date().toISOString(),
         }));
 
         await db.product_variants.bulkPut(formatted);
