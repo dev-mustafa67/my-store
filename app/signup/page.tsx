@@ -47,9 +47,17 @@ function SignupForm() {
     let targetStoreId = inviteStoreId;
 
     if (!isEmployeeInvite) {
+      // 💡 حساب 3 أيام تجريبية بدقة من لحظة التسجيل
+      const trialExpires = new Date();
+      trialExpires.setDate(trialExpires.getDate() + 3);
+
       const { data: store, error: storeError } = await supabase
         .from('stores')
-        .insert({ name: storeName.trim() })
+        .insert({ 
+          name: storeName.trim(),
+          subscription_status: 'trial',
+          subscription_expires_at: trialExpires.toISOString()
+        })
         .select()
         .single();
 
@@ -99,7 +107,7 @@ function SignupForm() {
               {isEmployeeInvite ? 'انضمام موظف جديد' : 'إنشاء متجر جديد'}
             </h1>
             <p className="text-sm text-gray-500 font-medium">
-              {isEmployeeInvite ? 'أكمل بياناتك للبدء بالبيع' : 'سجل الآن وابدأ بإدارة مبيعاتك وأرباحك بسهولة'}
+              {isEmployeeInvite ? 'أكمل بياناتك للبدء بالبيع' : 'سجل الآن وابدأ تجربتك المجانية لمدة 3 أيام'}
             </p>
           </div>
 
@@ -120,7 +128,7 @@ function SignupForm() {
 
             {!isEmployeeInvite && (
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1.5 ml-1">اسم المحل تجاري</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5 ml-1">اسم المحل التجاري</label>
                 <div className="relative">
                   <Store size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input 
@@ -197,7 +205,7 @@ function SignupForm() {
               <Loader2 size={20} className="animate-spin" />
             ) : (
               <>
-                {isEmployeeInvite ? 'تأكيد الانضمام للمحل' : 'إنشاء المتجر وبدء التجربة'} <ArrowRight size={18} />
+                {isEmployeeInvite ? 'تأكيد الانضمام للمحل' : 'إنشاء المتجر وبدء التجربة المجانية (3 أيام)'} <ArrowRight size={18} />
               </>
             )}
           </button>
