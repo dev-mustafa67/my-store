@@ -55,8 +55,23 @@ export default function POSPage() {
       setStoreId(profile.store_id);
       initAutoSync(profile.store_id);
       await syncQueue(profile.store_id);
-      const local = await db.product_variants.toArray();
-      setProducts(local);
+
+      // جلب منتجات هذا المتجر حصراً من السيرفر وتحديث الكاش المحلي
+      const { data: serverProducts } = await supabase
+        .from('product_variants')
+        .select('*, products!inner(store_id)')
+        .eq('products.store_id', profile.store_id);
+
+      if (serverProducts && serverProducts.length > 0) {
+        await db.product_variants.clear();
+        await db.product_variants.bulkPut(serverProducts);
+        setProducts(serverProducts);
+      } else {
+        const local = await db.product_variants.toArray();
+        const storeOnly = local.filter((p: any) => !p.store_id || p.store_id === profile.store_id);
+        setProducts(storeOnly);
+      }
+
       const { data: custs } = await supabase.from('customers').select('*').eq('store_id', profile.store_id);
       setCustomers(custs ?? []);
     })();
