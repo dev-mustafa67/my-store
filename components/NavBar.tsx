@@ -72,7 +72,7 @@ export default function NavBar() {
           <div className="flex items-center gap-6 lg:gap-8">
             <Link href="/" className="flex items-center gap-2 text-indigo-600">
               <Store size={28} />
-              <span className="font-black text-xl tracking-tight text-gray-900">الكاشير</span>
+              <span className="font-black text-xl tracking-tight text-gray-900">كاشيري</span>
             </Link>
             
             <div className="hidden md:flex items-center gap-1.5">
