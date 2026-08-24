@@ -46,35 +46,83 @@ export default function POSPage() {
   const [addingCust, setAddingCust] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: profile } = await supabase.from('users_profile').select('store_id').eq('id', user.id).single();
+
+      const { data: profile } = await supabase
+        .from('users_profile')
+        .select('store_id')
+        .eq('id', user.id)
+        .single();
+
       if (!profile?.store_id) return;
       
-      setStoreId(profile.store_id);
-      initAutoSync(profile.store_id);
-      await syncQueue(profile.store_id);
+      const currentStore = profile.store_id;
+      setStoreId(currentStore);
 
-      // جلب منتجات هذا المتجر حصراً من السيرفر وتحديث الكاش المحلي
-      const { data: serverProducts } = await supabase
+      // 1. مسح الكاش المحلي تماماً لمنع اختلاط بيانات المحلات
+      await db.product_variants.clear();
+
+      // 2. جلب منتجات هذا المتجر حصراً من السيرفر
+      const { data: serverVariants, error } = await supabase
         .from('product_variants')
-        .select('*, products!inner(store_id)')
-        .eq('products.store_id', profile.store_id);
+        .select(`
+          id,
+          product_id,
+          color,
+          size,
+          quantity,
+          cost_price,
+          sale_price,
+          barcode,
+          products!inner(id, name, store_id)
+        `)
+        .eq('products.store_id', currentStore);
 
-      if (serverProducts && serverProducts.length > 0) {
-        await db.product_variants.clear();
-        await db.product_variants.bulkPut(serverProducts);
-        setProducts(serverProducts);
-      } else {
-        const local = await db.product_variants.toArray();
-        const storeOnly = local.filter((p: any) => !p.store_id || p.store_id === profile.store_id);
-        setProducts(storeOnly);
+      if (serverVariants && isMounted) {
+        // تحويل البيانات لتتناسب مع واجهة الكاشير
+        const formatted = serverVariants.map((v: any) => ({
+          id: v.id,
+          productName: v.products?.name || 'منتج',
+          color: v.color,
+          size: v.size,
+          quantity: v.quantity,
+          costPrice: v.cost_price,
+          salePrice: v.sale_price,
+          barcode: v.barcode,
+          store_id: currentStore,
+        }));
+
+        await db.product_variants.bulkPut(formatted);
+        setProducts(formatted);
       }
 
-      const { data: custs } = await supabase.from('customers').select('*').eq('store_id', profile.store_id);
-      setCustomers(custs ?? []);
+      // 3. جلب زبائن المتجر الحالي فقط
+      const { data: custs } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('store_id', currentStore);
+
+      if (isMounted) setCustomers(custs ?? []);
+
+      initAutoSync(currentStore);
+      await syncQueue(currentStore);
     })();
+
+    const goOnline = () => setOnline(true);
+    const goOffline = () => setOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    setOnline(navigator.onLine);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
 
     const goOnline = () => setOnline(true);
     const goOffline = () => setOnline(false);
