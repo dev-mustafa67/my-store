@@ -47,7 +47,8 @@ export default function POSPage() {
 
   useEffect(() => {
     let isMounted = true;
-    (async () => {
+
+    async function loadData() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
@@ -60,29 +61,18 @@ export default function POSPage() {
       if (!profile?.store_id) return;
       
       const currentStore = profile.store_id;
-      setStoreId(currentStore);
+      if (isMounted) setStoreId(currentStore);
 
-      // 1. مسح الكاش المحلي تماماً لمنع اختلاط بيانات المحلات
+      // مسح الكاش المحلي لضمان عدم اختلاط بضاعة المتاجر
       await db.product_variants.clear();
 
-      // 2. جلب منتجات هذا المتجر حصراً من السيرفر
-      const { data: serverVariants, error } = await supabase
+      // جلب بضاعة المتجر الحالي فقط
+      const { data: serverVariants } = await supabase
         .from('product_variants')
-        .select(`
-          id,
-          product_id,
-          color,
-          size,
-          quantity,
-          cost_price,
-          sale_price,
-          barcode,
-          products!inner(id, name, store_id)
-        `)
+        .select('*, products!inner(id, name, store_id)')
         .eq('products.store_id', currentStore);
 
       if (serverVariants && isMounted) {
-        // تحويل البيانات لتتناسب مع واجهة الكاشير
         const formatted = serverVariants.map((v: any) => ({
           id: v.id,
           productName: v.products?.name || 'منتج',
@@ -99,7 +89,7 @@ export default function POSPage() {
         setProducts(formatted);
       }
 
-      // 3. جلب زبائن المتجر الحالي فقط
+      // جلب الزبائن
       const { data: custs } = await supabase
         .from('customers')
         .select('*')
@@ -109,7 +99,9 @@ export default function POSPage() {
 
       initAutoSync(currentStore);
       await syncQueue(currentStore);
-    })();
+    }
+
+    loadData();
 
     const goOnline = () => setOnline(true);
     const goOffline = () => setOnline(false);
@@ -119,17 +111,6 @@ export default function POSPage() {
 
     return () => {
       isMounted = false;
-      window.removeEventListener('online', goOnline);
-      window.removeEventListener('offline', goOffline);
-    };
-  }, []);
-
-    const goOnline = () => setOnline(true);
-    const goOffline = () => setOnline(false);
-    window.addEventListener('online', goOnline);
-    window.addEventListener('offline', goOffline);
-    setOnline(navigator.onLine);
-    return () => {
       window.removeEventListener('online', goOnline);
       window.removeEventListener('offline', goOffline);
     };
@@ -213,19 +194,6 @@ export default function POSPage() {
     }
   }
 
-  function sendWhatsAppReceipt() {
-    const cust = customers.find((c) => c.id === selectedCustomer);
-    if (!cust) {
-      const manualPhone = prompt('أدخل رقم هاتف الزبون لإرسال الفاتورة عبر الواتساب:');
-      if (!manualPhone) return;
-      generateWhatsAppURL(manualPhone, null);
-      return;
-    }
-    const phoneToUse = cust.phone || prompt('الزبون ليس لديه رقم مسجل، يرجى إدخال رقمه:');
-    if (!phoneToUse) return;
-    generateWhatsAppURL(phoneToUse, cust);
-  }
-
   function generateWhatsAppURL(phone: string, custDetails: any) {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     let text = `*📦 تفاصيل الطلب / الفاتورة*\n----------------------\n`;
@@ -241,6 +209,19 @@ export default function POSPage() {
     });
     text += `----------------------\n*💰 الإجمالي الكلي:* ${total.toLocaleString()} د.ع\nشكراً لتعاملكم معنا! 🙏`;
     window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`, '_blank');
+  }
+
+  function sendWhatsAppReceipt() {
+    const cust = customers.find((c) => c.id === selectedCustomer);
+    if (!cust) {
+      const manualPhone = prompt('أدخل رقم هاتف الزبون لإرسال الفاتورة عبر الواتساب:');
+      if (!manualPhone) return;
+      generateWhatsAppURL(manualPhone, null);
+      return;
+    }
+    const phoneToUse = cust.phone || prompt('الزبون ليس لديه رقم مسجل، يرجى إدخال رقمه:');
+    if (!phoneToUse) return;
+    generateWhatsAppURL(phoneToUse, cust);
   }
 
   function removeFromCart(id: string) {
