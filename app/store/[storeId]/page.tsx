@@ -5,8 +5,7 @@ import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase-client';
 import { 
   ShoppingCart, Plus, Minus, Trash2, MapPin, Phone, User, Send, 
-  ShoppingBag, Search, AlertCircle, ChevronRight, Star, ShieldCheck, 
-  Package, Store
+  Search, ShieldCheck, Package, Store, ChevronRight, Truck, Star
 } from 'lucide-react';
 
 export default function CustomerStorePage() {
@@ -23,8 +22,10 @@ export default function CustomerStorePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('الكل');
 
-  // بيانات التوصيل
   const [customer, setCustomer] = useState({ name: '', phone: '', address: '' });
+
+  // شحن مجاني إذا تجاوز الطلب 50,000 دينار
+  const FREE_SHIPPING_THRESHOLD = 50000;
 
   useEffect(() => {
     if (!storeId) return;
@@ -46,9 +47,10 @@ export default function CustomerStorePage() {
         }
       }
 
+      // 💡 لاحظ هنا: أضفنا استدعاء image_url من جدول المنتجات
       const { data: variants } = await supabase
         .from('product_variants')
-        .select('id, color, size, sale_price, quantity, products!inner(name)')
+        .select('id, color, size, sale_price, quantity, products!inner(name, image_url)')
         .eq('products.store_id', storeId)
         .gt('quantity', 0);
 
@@ -56,6 +58,7 @@ export default function CustomerStorePage() {
         const formatted = variants.map((v: any) => ({
           id: v.id,
           name: v.products?.name || 'منتج',
+          image: v.products?.image_url || null, // 👈 سحب الصورة إن وجدت
           color: v.color,
           size: v.size,
           price: Number(v.sale_price) || 0,
@@ -68,7 +71,6 @@ export default function CustomerStorePage() {
     fetchStoreData();
   }, [storeId]);
 
-  // فلترة المنتجات حسب البحث
   const filteredProducts = useMemo(() => {
     return products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [products, searchQuery]);
@@ -118,6 +120,7 @@ export default function CustomerStorePage() {
     
     text += `\n━━━━━━━━━━━━━━━━━\n`;
     text += `*💵 الإجمالي الكلي:* *${total.toLocaleString()} د.ع*\n`;
+    if(total >= FREE_SHIPPING_THRESHOLD) text += `🎉 *التوصيل مجاني!*\n`;
     text += `━━━━━━━━━━━━━━━━━\nيرجى تأكيد الطلب والمباشرة بالتوصيل. 🚚`;
 
     window.open(`https://wa.me/${targetPhone}?text=${encodeURIComponent(text)}`, '_blank');
@@ -125,56 +128,36 @@ export default function CustomerStorePage() {
 
   const total = cart.reduce((s, i) => s + (i.price * i.qty), 0);
   const totalItems = cart.reduce((s, i) => s + i.qty, 0);
+  const progressToFreeShipping = Math.min((total / FREE_SHIPPING_THRESHOLD) * 100, 100);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-4 animate-pulse">
-          <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center"><Store className="text-gray-400" size={30} /></div>
-          <div className="h-4 w-32 bg-gray-200 rounded-full"></div>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-white"><div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div></div>
+  );
 
-  if (!isPro) {
-    return (
-      <div dir="rtl" className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center space-y-4 shadow-xl border border-gray-100">
-          <div className="w-20 h-20 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-6">
-            <AlertCircle size={40} strokeWidth={1.5} />
-          </div>
-          <h2 className="text-2xl font-black text-gray-900">المتجر مغلق مؤقتاً</h2>
-          <p className="text-sm text-gray-500 leading-relaxed">
-            عذراً، هذا المتجر الإلكتروني غير متاح حالياً. يرجى مراجعة إدارة المتجر.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  if (!isPro) return (
+    <div dir="rtl" className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center space-y-4 shadow-xl border border-gray-100"><h2 className="text-xl font-black text-gray-900">المتجر مغلق مؤقتاً</h2></div>
+    </div>
+  );
 
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-50 font-sans pb-24 selection:bg-indigo-100 selection:text-indigo-900">
+    <div dir="rtl" className="min-h-screen bg-[#F9FAFB] font-sans pb-10 selection:bg-indigo-100 selection:text-indigo-900 flex flex-col">
       
-      {/* Header - Glassmorphism */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b border-gray-100 shadow-sm transition-all">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gray-900 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-gray-200/50">
-              <ShoppingBag size={24} />
-            </div>
-            <div>
-              <h1 className="font-black text-xl text-gray-900 tracking-tight">{storeName}</h1>
-              <div className="flex items-center gap-1 text-[10px] text-emerald-600 font-bold mt-0.5">
-                <ShieldCheck size={12} /> متجر موثوق
-              </div>
-            </div>
-          </div>
-          
-          <button onClick={() => setIsCartOpen(true)} className="relative p-3 bg-gray-50 hover:bg-gray-100 text-gray-900 rounded-2xl transition-all active:scale-95 border border-gray-200">
-            <ShoppingCart size={22} />
+      {/* Top Announcement Bar */}
+      <div className="bg-gray-900 text-white text-[10px] sm:text-xs text-center py-2 font-bold tracking-wide flex items-center justify-center gap-2">
+        <Truck size={14} /> توصيل مجاني للطلبات التي تتجاوز {FREE_SHIPPING_THRESHOLD.toLocaleString()} د.ع
+      </div>
+
+      {/* Elegant Header */}
+      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-gray-100 transition-all">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          <h1 className="font-black text-xl sm:text-2xl text-gray-900 tracking-tight flex items-center gap-2">
+            {storeName}
+          </h1>
+          <button onClick={() => setIsCartOpen(true)} className="relative p-2 text-gray-900 hover:bg-gray-100 rounded-full transition-all">
+            <ShoppingCart size={24} />
             {totalItems > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 bg-indigo-600 text-white text-[11px] font-black w-6 h-6 flex items-center justify-center rounded-full shadow-md shadow-indigo-200 border-2 border-white animate-in zoom-in">
+              <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full shadow-md border border-white">
                 {totalItems}
               </span>
             )}
@@ -182,100 +165,67 @@ export default function CustomerStorePage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto">
+      <main className="max-w-6xl mx-auto w-full flex-1">
         
-        {/* Hero Section */}
-        <section className="px-4 sm:px-6 mt-6 mb-10">
-          <div className="bg-gray-900 rounded-[2rem] overflow-hidden relative p-8 sm:p-12 shadow-2xl shadow-gray-200 text-white flex flex-col justify-center min-h-[200px]">
-            <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-l from-indigo-500/20 to-transparent pointer-events-none" />
-            <div className="relative z-10 max-w-xl">
-              <span className="inline-block px-3 py-1 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-xs font-bold mb-4">
-                ✨ تشكيلة جديدة
-              </span>
-              <h2 className="text-3xl sm:text-4xl font-black mb-3 leading-tight">أهلاً بك في {storeName}</h2>
-              <p className="text-gray-300 text-sm sm:text-base leading-relaxed max-w-md">
-                اكتشف أحدث المنتجات وتسوق بسهولة. نوفر لك أفضل الجودات مع خدمة دفع عند الاستلام لضمان راحتك.
-              </p>
-            </div>
+        {/* Search & Categories (Sticky just below header) */}
+        <section className="px-4 sm:px-6 py-6 sticky top-16 z-30 bg-[#F9FAFB]/90 backdrop-blur-md">
+          <div className="relative max-w-xl mx-auto">
+            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <input 
+              type="text" 
+              placeholder="ابحث في المتجر..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full h-12 pr-12 pl-4 bg-white rounded-full border border-gray-200 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 transition-all text-sm shadow-sm"
+            />
           </div>
         </section>
 
-        {/* Search & Filter Bar */}
-        <section className="px-4 sm:px-6 mb-8 sticky top-24 z-30">
-          <div className="bg-white p-2 rounded-2xl shadow-lg shadow-gray-100/50 border border-gray-100 flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input 
-                type="text" 
-                placeholder="ابحث عن منتج..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-12 pr-12 pl-4 bg-gray-50 rounded-xl outline-none focus:bg-indigo-50/50 focus:ring-2 focus:ring-indigo-100 transition-all text-sm font-medium"
-              />
-            </div>
-            <div className="hidden sm:flex bg-gray-50 rounded-xl p-1 gap-1">
-              {['الكل', 'عروض', 'الأكثر مبيعاً'].map(cat => (
-                <button 
-                  key={cat}
-                  onClick={() => setActiveCategory(cat)}
-                  className={`px-6 h-full rounded-lg text-xs font-bold transition-all ${activeCategory === cat ? 'bg-white shadow-sm text-indigo-600 border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Products Grid */}
-        <section className="px-4 sm:px-6 mb-12">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
-              جميع المنتجات <span className="text-sm font-bold text-gray-400 bg-gray-200 px-2 py-0.5 rounded-full">{filteredProducts.length}</span>
-            </h3>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+        {/* Minimalist Products Grid */}
+        <section className="px-4 sm:px-6 mb-16">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-x-6 sm:gap-y-10">
             {filteredProducts.map((p) => (
-              <div key={p.id} className="group bg-white rounded-3xl p-3 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-indigo-100/40 transition-all duration-300 flex flex-col justify-between overflow-hidden relative">
-                
-                {/* Product Image Placeholder (Ready for real images later) */}
-                <div className="w-full aspect-[4/5] bg-slate-100 rounded-2xl mb-4 flex items-center justify-center relative overflow-hidden group-hover:bg-indigo-50 transition-colors">
-                  <Package className="text-gray-300 group-hover:text-indigo-200 transition-colors" size={48} strokeWidth={1} />
-                  
-                  {/* Badges */}
-                  {p.maxQty <= 3 && p.maxQty > 0 && (
-                    <div className="absolute top-3 right-3 bg-red-500 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-md animate-pulse">
-                      🔥 باقي {p.maxQty} فقط
+              <div key={p.id} className="group cursor-pointer">
+                {/* Product Image Area */}
+                <div className="relative w-full aspect-[3/4] bg-gray-100 rounded-2xl mb-4 overflow-hidden shadow-sm border border-gray-100">
+                  {p.image ? (
+                    // إذا كانت الصورة موجودة
+                    <img src={p.image} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  ) : (
+                    // إذا لم تكن موجودة، نظهر التصميم الفارغ الأنيق
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 group-hover:bg-gray-100 transition-colors">
+                      <Package className="text-gray-300 mb-2" size={40} strokeWidth={1} />
+                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">No Image</span>
                     </div>
                   )}
-                  {/* Add to Cart Overlay on Desktop */}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex items-center justify-center backdrop-blur-[2px]">
-                    <button onClick={() => addToCart(p)} className="bg-white text-gray-900 px-6 py-2.5 rounded-full font-bold text-sm shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-all">
-                      أضف للسلة
+
+                  {/* Hot Badge */}
+                  {p.maxQty <= 5 && (
+                     <div className="absolute top-3 right-3 bg-gray-900/80 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1 rounded-full">
+                       قريباً ينفد
+                     </div>
+                  )}
+
+                  {/* Quick Add Button (Desktop hover) */}
+                  <div className="absolute bottom-4 left-0 right-0 px-4 opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 hidden md:block">
+                    <button onClick={(e) => { e.stopPropagation(); addToCart(p); }} className="w-full bg-white/90 backdrop-blur-md text-gray-900 py-2.5 rounded-xl font-bold text-xs shadow-lg hover:bg-white">
+                      + إضافة سريع
                     </button>
                   </div>
                 </div>
 
-                <div className="px-1 flex-1 flex flex-col">
-                  <div className="flex justify-between items-start mb-1">
-                    <h3 className="font-bold text-gray-900 text-sm line-clamp-2 leading-snug">{p.name}</h3>
+                {/* Product Info */}
+                <div className="px-1">
+                  <h3 className="font-bold text-gray-900 text-sm mb-1 line-clamp-1">{p.name}</h3>
+                  <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-2">
+                    {p.color && <span>{p.color}</span>}
+                    {p.size && <span>• {p.size}</span>}
                   </div>
-                  
-                  <div className="flex items-center gap-1.5 mt-1.5 mb-3 flex-wrap">
-                    {p.color && <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-md">{p.color}</span>}
-                    {p.size && <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-md">{p.size}</span>}
-                  </div>
-                  
-                  <div className="mt-auto flex items-center justify-between">
-                    <div className="font-black text-indigo-600 text-base">
-                      {p.price.toLocaleString()} <span className="text-[10px] text-gray-400">د.ع</span>
-                    </div>
-                    {/* Mobile Add to Cart Button */}
-                    <button 
-                      onClick={() => addToCart(p)}
-                      className="md:hidden w-8 h-8 bg-gray-900 text-white rounded-full flex items-center justify-center active:scale-90 transition-transform shadow-md"
-                    >
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-gray-900 text-base">{p.price.toLocaleString()} <span className="text-[10px] text-gray-500">د.ع</span></span>
+                    
+                    {/* Mobile Add Button */}
+                    <button onClick={(e) => { e.stopPropagation(); addToCart(p); }} className="md:hidden w-8 h-8 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-full flex items-center justify-center transition-colors">
                       <Plus size={16} />
                     </button>
                   </div>
@@ -283,113 +233,98 @@ export default function CustomerStorePage() {
               </div>
             ))}
           </div>
-
-          {filteredProducts.length === 0 && (
-            <div className="text-center py-24 bg-white rounded-3xl border border-gray-100 shadow-sm mt-4">
-              <Search className="mx-auto text-gray-300 mb-4" size={48} strokeWidth={1} />
-              <h3 className="text-lg font-bold text-gray-900">لم نجد ما تبحث عنه</h3>
-              <p className="text-sm text-gray-500 mt-2">جرب البحث بكلمات مختلفة أو تصفح المنتجات الأخرى.</p>
-            </div>
-          )}
         </section>
       </main>
 
-      {/* Cart Drawer */}
+      {/* Elegant Footer */}
+      <footer className="bg-white border-t border-gray-100 pt-10 pb-6 px-4">
+        <div className="max-w-6xl mx-auto text-center space-y-4">
+          <h2 className="text-xl font-black text-gray-900">{storeName}</h2>
+          <p className="text-xs text-gray-500 max-w-sm mx-auto">نقدم لكم أفضل المنتجات بأعلى جودة. تسوق الآن وادفع عند الاستلام بكل أمان.</p>
+          <div className="pt-6 border-t border-gray-50 text-[10px] text-gray-400 font-bold flex flex-col items-center gap-2">
+            <span>جميع الحقوق محفوظة © {new Date().getFullYear()}</span>
+            <span className="flex items-center gap-1 bg-gray-50 px-3 py-1.5 rounded-full">⚡ تم التشغيل بواسطة <strong className="text-indigo-600">كاشيري المنصة الذكية</strong></span>
+          </div>
+        </div>
+      </footer>
+
+      {/* Premium Cart Drawer */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" 
-            onClick={() => setIsCartOpen(false)}
-          />
+          <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity" onClick={() => setIsCartOpen(false)} />
           
-          {/* Drawer Panel */}
-          <div className="relative w-full max-w-[400px] bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-left duration-300 sm:rounded-r-3xl">
+          <div className="relative w-full max-w-[420px] bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-left duration-300">
             
-            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-10">
-              <h2 className="font-black text-lg flex items-center gap-2 text-gray-900">
-                <ShoppingCart size={22} className="text-indigo-600" /> سلة المشتريات
-                <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{totalItems}</span>
-              </h2>
-              <button onClick={() => setIsCartOpen(false)} className="w-8 h-8 flex items-center justify-center bg-gray-100 text-gray-500 hover:text-gray-900 hover:bg-gray-200 rounded-full transition-colors">
-                ✕
-              </button>
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white">
+              <h2 className="font-black text-lg text-gray-900">سلتك ({totalItems})</h2>
+              <button onClick={() => setIsCartOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronRight size={20} /></button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar bg-slate-50/50">
+            {/* Gamification: Free Shipping Bar */}
+            <div className="p-4 bg-gray-50 border-b border-gray-100">
+              <div className="flex justify-between items-end mb-2">
+                <span className="text-xs font-bold text-gray-700">
+                  {total >= FREE_SHIPPING_THRESHOLD ? '🎉 مبروك! حصلت على شحن مجاني' : `أضف بـ ${(FREE_SHIPPING_THRESHOLD - total).toLocaleString()} د.ع لشحن مجاني`}
+                </span>
+                <Truck size={16} className={total >= FREE_SHIPPING_THRESHOLD ? 'text-emerald-500' : 'text-gray-400'} />
+              </div>
+              <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
+                <div className={`h-full transition-all duration-500 ${total >= FREE_SHIPPING_THRESHOLD ? 'bg-emerald-500' : 'bg-gray-900'}`} style={{ width: `${progressToFreeShipping}%` }}></div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
               {cart.map((item) => (
-                <div key={item.id} className="flex gap-4 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
-                  <div className="w-16 h-16 bg-gray-50 rounded-xl flex items-center justify-center shrink-0 border border-gray-100">
-                     <Package size={24} className="text-gray-300" />
+                <div key={item.id} className="flex gap-4 group">
+                  <div className="w-20 h-24 bg-gray-100 rounded-xl flex items-center justify-center shrink-0 overflow-hidden relative border border-gray-100">
+                    {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <Package size={24} className="text-gray-300" />}
                   </div>
-                  <div className="flex-1 flex flex-col justify-between">
+                  <div className="flex-1 flex flex-col justify-between py-1">
                     <div className="flex justify-between items-start">
-                      <p className="font-bold text-sm text-gray-900 line-clamp-1">{item.name}</p>
-                      <button onClick={() => removeFromCart(item.id)} className="text-red-400 hover:text-red-600 p-1 bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>
-                    </div>
-                    <div className="flex items-center justify-between mt-2">
-                      <p className="text-xs font-black text-indigo-600">{item.price.toLocaleString()} د.ع</p>
-                      
-                      {/* Quantity Stepper */}
-                      <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg h-7">
-                        <button onClick={() => updateQty(item.id, -1)} className="w-7 h-full flex items-center justify-center text-gray-500 hover:text-black transition-colors"><Minus size={12} strokeWidth={3} /></button>
-                        <span className="text-xs font-bold w-6 text-center">{item.qty}</span>
-                        <button onClick={() => updateQty(item.id, 1)} className="w-7 h-full flex items-center justify-center text-gray-500 hover:text-black transition-colors"><Plus size={12} strokeWidth={3} /></button>
+                      <div>
+                        <p className="font-bold text-sm text-gray-900">{item.name}</p>
+                        <p className="text-[10px] text-gray-500 mt-1">{item.color} {item.size && `- ${item.size}`}</p>
                       </div>
+                      <button onClick={() => removeFromCart(item.id)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
+                    </div>
+                    <div className="flex items-center justify-between mt-3">
+                      <div className="flex items-center bg-gray-100 rounded-lg h-8 px-1">
+                        <button onClick={() => updateQty(item.id, -1)} className="w-7 h-full flex items-center justify-center text-gray-600 hover:text-black font-bold">-</button>
+                        <span className="text-xs font-black w-6 text-center">{item.qty}</span>
+                        <button onClick={() => updateQty(item.id, 1)} className="w-7 h-full flex items-center justify-center text-gray-600 hover:text-black font-bold">+</button>
+                      </div>
+                      <p className="text-sm font-black text-gray-900">{(item.price * item.qty).toLocaleString()} د.ع</p>
                     </div>
                   </div>
                 </div>
               ))}
               
               {cart.length > 0 ? (
-                <div className="mt-8">
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">1</span>
-                    <h3 className="font-black text-sm text-gray-900">معلومات التوصيل</h3>
-                    <div className="flex-1 h-px bg-gray-200"></div>
-                  </div>
-
+                <div className="mt-8 pt-6 border-t border-gray-100">
+                  <h3 className="font-black text-sm text-gray-900 mb-4">أين نرسل طلبك؟</h3>
                   <form id="checkout-form" onSubmit={sendOrderViaWhatsApp} className="space-y-3">
-                    <div className="relative">
-                      <User size={18} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input required type="text" placeholder="الاسم الكامل" value={customer.name} onChange={e => setCustomer({...customer, name: e.target.value})} className="w-full h-12 pr-11 pl-4 rounded-xl border border-gray-200 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 bg-white transition-all shadow-sm" />
-                    </div>
-                    <div className="relative">
-                      <Phone size={18} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input required type="tel" placeholder="رقم الهاتف (07...)" value={customer.phone} onChange={e => setCustomer({...customer, phone: e.target.value})} className="w-full h-12 pr-11 pl-4 rounded-xl border border-gray-200 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 bg-white transition-all shadow-sm" dir="rtl" />
-                    </div>
-                    <div className="relative">
-                      <MapPin size={18} className="absolute right-3.5 top-[14px] text-gray-400" />
-                      <textarea required placeholder="المحافظة والعنوان بالتفصيل" value={customer.address} onChange={e => setCustomer({...customer, address: e.target.value})} className="w-full h-24 pt-3.5 pr-11 pl-4 rounded-xl border border-gray-200 text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 bg-white transition-all shadow-sm resize-none" />
-                    </div>
+                    <input required type="text" placeholder="الاسم الكامل" value={customer.name} onChange={e => setCustomer({...customer, name: e.target.value})} className="w-full h-12 px-4 rounded-xl border border-gray-200 text-sm outline-none focus:border-gray-900 bg-gray-50 focus:bg-white transition-all" />
+                    <input required type="tel" placeholder="رقم الهاتف" value={customer.phone} onChange={e => setCustomer({...customer, phone: e.target.value})} className="w-full h-12 px-4 rounded-xl border border-gray-200 text-sm outline-none focus:border-gray-900 bg-gray-50 focus:bg-white transition-all" dir="rtl" />
+                    <textarea required placeholder="المحافظة والمنطقة وأقرب نقطة دالة" value={customer.address} onChange={e => setCustomer({...customer, address: e.target.value})} className="w-full h-20 py-3 px-4 rounded-xl border border-gray-200 text-sm outline-none focus:border-gray-900 bg-gray-50 focus:bg-white transition-all resize-none" />
                   </form>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-center pb-20 opacity-50">
-                  <ShoppingCart size={80} className="text-gray-300 mb-6" strokeWidth={1} />
-                  <h3 className="text-xl font-black text-gray-900 mb-2">سلتك فارغة</h3>
-                  <p className="text-sm text-gray-500 max-w-[200px]">قم بإضافة بعض المنتجات للسلة لإتمام طلبك.</p>
-                  <button onClick={() => setIsCartOpen(false)} className="mt-6 px-6 py-2 bg-gray-900 text-white rounded-full text-sm font-bold">تصفح المنتجات</button>
+                <div className="flex flex-col items-center justify-center h-full text-center pb-10">
+                  <ShoppingBag size={64} className="text-gray-200 mb-4" strokeWidth={1} />
+                  <p className="text-sm text-gray-500">السلة فارغة حالياً</p>
                 </div>
               )}
             </div>
 
             {cart.length > 0 && (
-              <div className="p-5 bg-white border-t border-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+              <div className="p-5 bg-white border-t border-gray-100">
                 <div className="flex justify-between items-center mb-4">
-                  <span className="font-bold text-gray-500 text-sm">المجموع الكلي:</span>
+                  <span className="font-bold text-gray-500 text-sm">المجموع الكلي</span>
                   <span className="font-black text-2xl text-gray-900">{total.toLocaleString()} <span className="text-sm text-gray-400">د.ع</span></span>
                 </div>
-                <button 
-                  type="submit" 
-                  form="checkout-form"
-                  className="w-full h-14 bg-[#25D366] text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-[#1ebd5a] active:scale-[0.98] transition-all shadow-lg shadow-[#25D366]/30"
-                >
-                  <Send size={20} /> إرسال الطلب عبر واتساب
+                <button type="submit" form="checkout-form" className="w-full h-14 bg-gray-900 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-black transition-all shadow-xl shadow-gray-900/20 active:scale-95">
+                  <Send size={18} /> تأكيد الطلب عبر واتساب
                 </button>
-                <p className="text-center text-[10px] text-gray-400 mt-3 flex items-center justify-center gap-1">
-                  <ShieldCheck size={12} /> الدفع يتم بأمان عند الاستلام
-                </p>
               </div>
             )}
           </div>
