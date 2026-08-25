@@ -69,12 +69,19 @@ function SignupForm() {
       targetStoreId = store.id;
     }
 
+    // حساب 3 أيام تجريبية للحساب
+    const trialEnd = new Date();
+    trialEnd.setDate(trialEnd.getDate() + 3);
+
     const { error: profileError } = await supabase.from('users_profile').insert({
       id: authData.user.id,
       full_name: fullName.trim(),
+      store_name: storeName.trim() || 'متجر جديد',
       email: email.trim(),
       role: isEmployeeInvite ? 'employee' : 'owner',
       store_id: targetStoreId,
+      plan_type: 'basic',
+      subscription_end_date: trialEnd.toISOString(),
     });
 
     if (profileError) {
