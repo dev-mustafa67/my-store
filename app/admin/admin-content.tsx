@@ -10,10 +10,7 @@ import {
   Store, 
   Calendar, 
   Sparkles, 
-  CheckCircle, 
-  AlertCircle,
-  ExternalLink,
-  Zap
+  ExternalLink
 } from 'lucide-react';
 
 interface StoreProfile {
@@ -49,38 +46,44 @@ export default function AdminPage() {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (data) setStores(data as any);
+    if (data) {
+      // إزالة التكرار للمتاجر التي تشترك في نفس store_id
+      const uniqueStores = Array.from(
+        new Map(data.filter((s: any) => s.store_id).map((s: any) => [s.store_id, s])).values()
+      );
+      setStores(uniqueStores as any);
+    }
     setLoading(false);
   }
 
   // تمديد أيام الاشتراك
   async function addDays(store: StoreProfile, days: number) {
     setActionLoading(store.id);
-    const currentEnd = new Date(store.subscription_end_date);
-    const baseDate = currentEnd > new Date() ? currentEnd : new Date();
+    const validDate = store.subscription_end_date ? new Date(store.subscription_end_date) : new Date();
+    const baseDate = !isNaN(validDate.getTime()) && validDate > new Date() ? validDate : new Date();
     baseDate.setDate(baseDate.getDate() + days);
 
     const { error } = await supabase
       .from('users_profile')
       .update({ subscription_end_date: baseDate.toISOString() })
-      .eq('id', store.id);
+      .eq('store_id', store.store_id);
 
     if (!error) {
-      setStores(prev => prev.map(s => s.id === store.id ? { ...s, subscription_end_date: baseDate.toISOString() } : s));
+      setStores(prev => prev.map(s => s.store_id === store.store_id ? { ...s, subscription_end_date: baseDate.toISOString() } : s));
     }
     setActionLoading(null);
   }
 
-  // تغيير نوع الباقة (Basic أو Pro)
+  // تغيير نوع الباقة
   async function togglePlan(store: StoreProfile, newPlan: 'basic' | 'pro') {
     setActionLoading(store.id);
     const { error } = await supabase
       .from('users_profile')
       .update({ plan_type: newPlan })
-      .eq('id', store.id);
+      .eq('store_id', store.store_id);
 
     if (!error) {
-      setStores(prev => prev.map(s => s.id === store.id ? { ...s, plan_type: newPlan } : s));
+      setStores(prev => prev.map(s => s.store_id === store.store_id ? { ...s, plan_type: newPlan } : s));
     }
     setActionLoading(null);
   }
@@ -107,8 +110,12 @@ export default function AdminPage() {
         ) : (
           <div className="grid grid-cols-1 gap-4">
             {stores.map((s) => {
-              const isExpired = new Date(s.subscription_end_date) < new Date();
-              const daysLeft = Math.max(0, Math.ceil((new Date(s.subscription_end_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)));
+              const endDate = s.subscription_end_date ? new Date(s.subscription_end_date) : null;
+              const isValidDate = endDate && !isNaN(endDate.getTime());
+              const isExpired = isValidDate ? endDate < new Date() : true;
+              const daysLeft = isValidDate 
+                ? Math.max(0, Math.ceil((endDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))
+                : 0;
 
               return (
                 <div key={s.id} className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
