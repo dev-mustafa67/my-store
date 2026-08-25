@@ -5,7 +5,8 @@ import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase-client';
 import { 
   ShoppingCart, Plus, Minus, Trash2, MapPin, Phone, User, Send, 
-  Search, ShieldCheck, Package, Store, ChevronRight, Truck, Star
+  Search, ShieldCheck, Package, Store, ChevronRight, Truck, Star,
+  ShoppingBag
 } from 'lucide-react';
 
 export default function CustomerStorePage() {
@@ -47,7 +48,6 @@ export default function CustomerStorePage() {
         }
       }
 
-      // 💡 لاحظ هنا: أضفنا استدعاء image_url من جدول المنتجات
       const { data: variants } = await supabase
         .from('product_variants')
         .select('id, color, size, sale_price, quantity, products!inner(name, image_url)')
@@ -58,7 +58,7 @@ export default function CustomerStorePage() {
         const formatted = variants.map((v: any) => ({
           id: v.id,
           name: v.products?.name || 'منتج',
-          image: v.products?.image_url || null, // 👈 سحب الصورة إن وجدت
+          image: v.products?.image_url || null,
           color: v.color,
           size: v.size,
           price: Number(v.sale_price) || 0,
@@ -131,18 +131,21 @@ export default function CustomerStorePage() {
   const progressToFreeShipping = Math.min((total / FREE_SHIPPING_THRESHOLD) * 100, 100);
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-white"><div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div></div>
+    <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+    </div>
   );
 
   if (!isPro) return (
     <div dir="rtl" className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center space-y-4 shadow-xl border border-gray-100"><h2 className="text-xl font-black text-gray-900">المتجر مغلق مؤقتاً</h2></div>
+      <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center space-y-4 shadow-xl border border-gray-100">
+        <h2 className="text-xl font-black text-gray-900">المتجر مغلق مؤقتاً</h2>
+      </div>
     </div>
   );
 
   return (
     <div dir="rtl" className="min-h-screen bg-[#F9FAFB] font-sans pb-10 selection:bg-indigo-100 selection:text-indigo-900 flex flex-col">
-      
       {/* Top Announcement Bar */}
       <div className="bg-gray-900 text-white text-[10px] sm:text-xs text-center py-2 font-bold tracking-wide flex items-center justify-center gap-2">
         <Truck size={14} /> توصيل مجاني للطلبات التي تتجاوز {FREE_SHIPPING_THRESHOLD.toLocaleString()} د.ع
@@ -166,8 +169,7 @@ export default function CustomerStorePage() {
       </header>
 
       <main className="max-w-6xl mx-auto w-full flex-1">
-        
-        {/* Search & Categories (Sticky just below header) */}
+        {/* Search Bar */}
         <section className="px-4 sm:px-6 py-6 sticky top-16 z-30 bg-[#F9FAFB]/90 backdrop-blur-md">
           <div className="relative max-w-xl mx-auto">
             <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
@@ -189,10 +191,8 @@ export default function CustomerStorePage() {
                 {/* Product Image Area */}
                 <div className="relative w-full aspect-[3/4] bg-gray-100 rounded-2xl mb-4 overflow-hidden shadow-sm border border-gray-100">
                   {p.image ? (
-                    // إذا كانت الصورة موجودة
                     <img src={p.image} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   ) : (
-                    // إذا لم تكن موجودة، نظهر التصميم الفارغ الأنيق
                     <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 group-hover:bg-gray-100 transition-colors">
                       <Package className="text-gray-300 mb-2" size={40} strokeWidth={1} />
                       <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">No Image</span>
@@ -201,12 +201,12 @@ export default function CustomerStorePage() {
 
                   {/* Hot Badge */}
                   {p.maxQty <= 5 && (
-                     <div className="absolute top-3 right-3 bg-gray-900/80 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1 rounded-full">
-                       قريباً ينفد
-                     </div>
+                    <div className="absolute top-3 right-3 bg-gray-900/80 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1 rounded-full">
+                      قريباً ينفد
+                    </div>
                   )}
 
-                  {/* Quick Add Button (Desktop hover) */}
+                  {/* Quick Add Button */}
                   <div className="absolute bottom-4 left-0 right-0 px-4 opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 hidden md:block">
                     <button onClick={(e) => { e.stopPropagation(); addToCart(p); }} className="w-full bg-white/90 backdrop-blur-md text-gray-900 py-2.5 rounded-xl font-bold text-xs shadow-lg hover:bg-white">
                       + إضافة سريع
@@ -224,7 +224,6 @@ export default function CustomerStorePage() {
                   <div className="flex items-center justify-between">
                     <span className="font-black text-gray-900 text-base">{p.price.toLocaleString()} <span className="text-[10px] text-gray-500">د.ع</span></span>
                     
-                    {/* Mobile Add Button */}
                     <button onClick={(e) => { e.stopPropagation(); addToCart(p); }} className="md:hidden w-8 h-8 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-full flex items-center justify-center transition-colors">
                       <Plus size={16} />
                     </button>
@@ -254,13 +253,12 @@ export default function CustomerStorePage() {
           <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity" onClick={() => setIsCartOpen(false)} />
           
           <div className="relative w-full max-w-[420px] bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-left duration-300">
-            
             <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white">
               <h2 className="font-black text-lg text-gray-900">سلتك ({totalItems})</h2>
               <button onClick={() => setIsCartOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronRight size={20} /></button>
             </div>
 
-            {/* Gamification: Free Shipping Bar */}
+            {/* Free Shipping Bar */}
             <div className="p-4 bg-gray-50 border-b border-gray-100">
               <div className="flex justify-between items-end mb-2">
                 <span className="text-xs font-bold text-gray-700">
@@ -277,7 +275,7 @@ export default function CustomerStorePage() {
               {cart.map((item) => (
                 <div key={item.id} className="flex gap-4 group">
                   <div className="w-20 h-24 bg-gray-100 rounded-xl flex items-center justify-center shrink-0 overflow-hidden relative border border-gray-100">
-                    {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <Package size={24} className="text-gray-300" />}
+                    {item.image ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" /> : <Package size={24} className="text-gray-300" />}
                   </div>
                   <div className="flex-1 flex flex-col justify-between py-1">
                     <div className="flex justify-between items-start">
