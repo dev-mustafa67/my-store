@@ -9,7 +9,10 @@ import {
   ShieldCheck, 
   Sparkles, 
   ExternalLink,
-  Plus
+  Plus,
+  Edit,
+  X,
+  Save
 } from 'lucide-react';
 
 interface StoreProfile {
@@ -30,6 +33,11 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+  // حالات نافذة التعديل
+  const [editingStore, setEditingStore] = useState<StoreProfile | null>(null);
+  const [editForm, setEditForm] = useState({ store_name: '', phone: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+
   useEffect(() => {
     if (!sub.loading && !sub.isSuperAdmin) {
       router.push('/');
@@ -46,7 +54,7 @@ export default function AdminPage() {
       .order('created_at', { ascending: false });
 
     if (data) {
-      // إزالة التكرار
+      // إزالة التكرار للمتاجر التي تشترك في نفس store_id
       const uniqueStores = Array.from(
         new Map(data.filter((s: any) => s.store_id).map((s: any) => [s.store_id, s])).values()
       );
@@ -89,9 +97,82 @@ export default function AdminPage() {
     setActionLoading(null);
   }
 
+  // حفظ تعديلات اسم ورقم المتجر
+  async function saveStoreDetails(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingStore) return;
+    setSavingEdit(true);
+
+    const { error } = await supabase
+      .from('users_profile')
+      .update({ 
+        store_name: editForm.store_name.trim() || null, 
+        phone: editForm.phone.trim() || null 
+      })
+      .eq('store_id', editingStore.store_id);
+
+    if (!error) {
+      setStores(prev => prev.map(s => 
+        s.store_id === editingStore.store_id 
+          ? { ...s, store_name: editForm.store_name, phone: editForm.phone } 
+          : s
+      ));
+      setEditingStore(null);
+    } else {
+      alert('حدث خطأ أثناء الحفظ');
+    }
+    setSavingEdit(false);
+  }
+
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-50 pb-20">
+    <div dir="rtl" className="min-h-screen bg-slate-50 pb-20 relative">
       <NavBar />
+
+      {/* نافذة تعديل بيانات المتجر المنبثقة */}
+      {editingStore && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-lg font-black text-gray-900">تعديل بيانات المتجر</h3>
+              <button onClick={() => setEditingStore(null)} className="text-gray-400 hover:text-red-500 transition">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={saveStoreDetails} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">اسم المتجر / البيج</label>
+                <input 
+                  type="text" 
+                  value={editForm.store_name} 
+                  onChange={e => setEditForm({...editForm, store_name: e.target.value})} 
+                  className="w-full h-11 px-3 rounded-xl border border-gray-200 text-sm outline-none focus:border-indigo-500 bg-gray-50 focus:bg-white transition" 
+                  placeholder="مثال: أزياء بغداد..." 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">رقم هاتف المتجر</label>
+                <input 
+                  type="text" 
+                  value={editForm.phone} 
+                  onChange={e => setEditForm({...editForm, phone: e.target.value})} 
+                  className="w-full h-11 px-3 rounded-xl border border-gray-200 text-sm outline-none focus:border-indigo-500 bg-gray-50 focus:bg-white transition" 
+                  placeholder="07xxxxxxxxx" 
+                />
+              </div>
+              <div className="pt-2">
+                <button 
+                  type="submit" 
+                  disabled={savingEdit} 
+                  className="w-full h-12 bg-indigo-600 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-indigo-700 disabled:opacity-50 transition shadow-md"
+                >
+                  {savingEdit ? 'جاري الحفظ...' : <><Save size={18} /> حفظ التعديلات</>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -119,10 +200,22 @@ export default function AdminPage() {
                 : 0;
 
               return (
-                <div key={s.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col overflow-hidden hover:shadow-md transition">
+                <div key={s.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col overflow-hidden hover:shadow-md transition relative">
                   
+                  {/* زر التعديل السريع للمتجر */}
+                  <button 
+                    onClick={() => {
+                      setEditingStore(s);
+                      setEditForm({ store_name: s.store_name || '', phone: s.phone || '' });
+                    }}
+                    className="absolute top-5 left-5 p-2 bg-gray-50 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition border border-gray-200"
+                    title="تعديل اسم ورقم المتجر"
+                  >
+                    <Edit size={16} />
+                  </button>
+
                   {/* 1. معلومات المتجر (القسم العلوي) */}
-                  <div className="p-5 sm:p-6 space-y-3">
+                  <div className="p-5 sm:p-6 space-y-3 pr-14 sm:pr-6">
                     <div className="flex flex-wrap items-center gap-2.5">
                       <h3 className="font-bold text-gray-900 text-lg">
                         {s.store_name?.trim() ? s.store_name : `متجر رقم #${index + 1}`}
@@ -146,7 +239,7 @@ export default function AdminPage() {
                     </div>
 
                     <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
-                      <span>📞 {s.phone || 'بدون رقم هاتف'}</span>
+                      <span className={!s.phone ? 'text-red-400 font-bold' : ''}>📞 {s.phone || 'بدون رقم هاتف'}</span>
                       <span className="hidden sm:inline">•</span>
                       <span>معرف المتجر: <code className="bg-slate-100 px-2 py-0.5 rounded text-[11px] font-mono text-slate-700">{s.store_id}</code></span>
                     </div>
