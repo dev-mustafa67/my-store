@@ -7,12 +7,8 @@ import { supabase } from '@/lib/supabase-client';
 import { useSubscription } from '@/lib/subscription';
 import { 
   ShieldCheck, 
-  Store, 
-  Calendar, 
   Sparkles, 
   ExternalLink,
-  Phone,
-  Clock,
   Plus
 } from 'lucide-react';
 
@@ -50,7 +46,7 @@ export default function AdminPage() {
       .order('created_at', { ascending: false });
 
     if (data) {
-      // إزالة التكرار للمتاجر التي تشترك في نفس store_id
+      // إزالة التكرار
       const uniqueStores = Array.from(
         new Map(data.filter((s: any) => s.store_id).map((s: any) => [s.store_id, s])).values()
       );
@@ -97,7 +93,7 @@ export default function AdminPage() {
     <div dir="rtl" className="min-h-screen bg-slate-50 pb-20">
       <NavBar />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-xl font-black text-gray-900 flex items-center gap-2">
@@ -113,7 +109,7 @@ export default function AdminPage() {
         {loading ? (
           <div className="text-center py-20 text-gray-400 font-bold text-sm">جاري تحميل بيانات المتاجر...</div>
         ) : (
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 gap-5">
             {stores.map((s, index) => {
               const endDate = s.subscription_end_date ? new Date(s.subscription_end_date) : null;
               const isValidDate = endDate && !isNaN(endDate.getTime());
@@ -123,24 +119,25 @@ export default function AdminPage() {
                 : 0;
 
               return (
-                <div key={s.id} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5 hover:shadow-md transition">
-                  {/* Store Details */}
-                  <div className="space-y-2 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-gray-900 text-base">
+                <div key={s.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col overflow-hidden hover:shadow-md transition">
+                  
+                  {/* 1. معلومات المتجر (القسم العلوي) */}
+                  <div className="p-5 sm:p-6 space-y-3">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <h3 className="font-bold text-gray-900 text-lg">
                         {s.store_name?.trim() ? s.store_name : `متجر رقم #${index + 1}`}
                       </h3>
                       
-                      {/* Plan Badge */}
+                      {/* باجة نوع الباقة */}
                       <span className={`text-[11px] font-black px-3 py-1 rounded-full flex items-center gap-1 ${
                         s.plan_type === 'pro' 
                           ? 'bg-indigo-600 text-white' 
                           : 'bg-gray-100 text-gray-700'
                       }`}>
-                        {s.plan_type === 'pro' ? <><Sparkles size={12} /> برو + متجر (25K)</> : 'كاشير أساسي (10K)'}
+                        {s.plan_type === 'pro' ? <><Sparkles size={12} /> برو (25K)</> : 'كاشير أساسي (10K)'}
                       </span>
 
-                      {/* Status Badge */}
+                      {/* باجة حالة الاشتراك */}
                       <span className={`text-[11px] font-bold px-3 py-1 rounded-full ${
                         isExpired ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'
                       }`}>
@@ -148,66 +145,70 @@ export default function AdminPage() {
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
+                    <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
                       <span>📞 {s.phone || 'بدون رقم هاتف'}</span>
-                      <span>•</span>
-                      <span>معرف المتجر: <code className="bg-gray-100 px-2 py-0.5 rounded text-[11px] text-gray-700">{s.store_id.slice(0, 13)}...</code></span>
+                      <span className="hidden sm:inline">•</span>
+                      <span>معرف المتجر: <code className="bg-slate-100 px-2 py-0.5 rounded text-[11px] font-mono text-slate-700">{s.store_id}</code></span>
                     </div>
 
-                    {/* Store Public Link */}
+                    {/* رابط المتجر إذا كان برو */}
                     {s.plan_type === 'pro' && (
-                      <div className="pt-1">
+                      <div className="pt-2">
                         <a 
                           href={`/store/${s.store_id}`} 
                           target="_blank" 
                           rel="noopener noreferrer" 
-                          className="inline-flex items-center gap-1.5 text-xs text-indigo-600 font-bold hover:underline bg-indigo-50 px-3 py-1 rounded-xl"
+                          className="inline-flex items-center gap-1.5 text-xs text-indigo-700 font-bold hover:underline bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-xl"
                         >
-                          <ExternalLink size={13} /> فتح رابط المتجر الإلكتروني للزبائن
+                          <ExternalLink size={14} /> معاينة المتجر الإلكتروني للزبائن
                         </a>
                       </div>
                     )}
                   </div>
 
-                  {/* Management Controls */}
-                  <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-start lg:justify-end pt-3 lg:pt-0 border-t lg:border-t-0 border-gray-100">
-                    {/* Plan Selector Buttons */}
-                    <div className="flex bg-gray-100 p-1 rounded-2xl">
+                  {/* 2. أزرار التحكم (القسم السفلي - شريط الإجراءات) */}
+                  <div className="bg-slate-50 p-4 sm:px-6 border-t border-gray-100 flex flex-wrap items-center justify-between gap-4">
+                    
+                    {/* أزرار تبديل الباقة */}
+                    <div className="flex items-center bg-white border border-gray-200 p-1 rounded-xl shadow-sm w-full sm:w-auto">
                       <button
                         disabled={actionLoading === s.id}
                         onClick={() => togglePlan(s, 'basic')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                          s.plan_type !== 'pro' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'
+                        className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition ${
+                          s.plan_type !== 'pro' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
                         }`}
                       >
-                        أساسي
+                        باقة أساسية
                       </button>
                       <button
                         disabled={actionLoading === s.id}
                         onClick={() => togglePlan(s, 'pro')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 ${
-                          s.plan_type === 'pro' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-500 hover:text-indigo-600'
+                        className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 ${
+                          s.plan_type === 'pro' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50'
                         }`}
                       >
-                        <Sparkles size={12} /> برو
+                        <Sparkles size={14} /> باقة برو
                       </button>
                     </div>
 
-                    {/* Add Days Buttons */}
-                    <button
-                      disabled={actionLoading === s.id}
-                      onClick={() => addDays(s, 30)}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1"
-                    >
-                      <Plus size={14} /> تفعيل شهر (30 يوم)
-                    </button>
-                    <button
-                      disabled={actionLoading === s.id}
-                      onClick={() => addDays(s, 7)}
-                      className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition"
-                    >
-                      +7 أيام
-                    </button>
+                    {/* أزرار التمديد */}
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <button
+                        disabled={actionLoading === s.id}
+                        onClick={() => addDays(s, 7)}
+                        className="flex-1 sm:flex-none px-4 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 hover:text-indigo-600 text-gray-700 rounded-xl text-xs font-bold transition shadow-sm text-center"
+                      >
+                        +7 أيام تجربة
+                      </button>
+                      <button
+                        disabled={actionLoading === s.id}
+                        onClick={() => addDays(s, 30)}
+                        className="flex-1 sm:flex-none px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm shadow-emerald-200 flex items-center justify-center gap-1.5"
+                      >
+                        <Plus size={16} /> تفعيل 30 يوم
+                      </button>
+                    </div>
+
                   </div>
                 </div>
               );
