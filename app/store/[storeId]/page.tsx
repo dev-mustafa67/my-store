@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase-client';
 import { ShoppingCart, Plus, Minus, Trash2, MapPin, Phone, User, Send, ShoppingBag, AlertCircle } from 'lucide-react';
 
-export default function CustomerStorePage({ params }: { params: { storeId: string } }) {
-  const storeId = params.storeId;
+export default function CustomerStorePage() {
+  const params = useParams();
+  const storeId = typeof params?.storeId === 'string' ? params.storeId : Array.isArray(params?.storeId) ? params.storeId[0] : '';
+
   const [storeName, setStoreName] = useState('');
   const [storePhone, setStorePhone] = useState('');
   const [isPro, setIsPro] = useState(true);
@@ -18,6 +21,8 @@ export default function CustomerStorePage({ params }: { params: { storeId: strin
   const [customer, setCustomer] = useState({ name: '', phone: '', address: '' });
 
   useEffect(() => {
+    if (!storeId) return;
+
     async function fetchStoreData() {
       // 1. فحص بيانات المتجر وخطة الاشتراك
       const { data: profile } = await supabase
@@ -29,7 +34,6 @@ export default function CustomerStorePage({ params }: { params: { storeId: strin
       if (profile) {
         setStoreName(profile.store_name || 'متجر كاشيري');
         setStorePhone(profile.phone || '');
-        // التحقق إن كانت الباقة تدعم المتجر الإلكتروني (pro)
         if (profile.plan_type === 'basic') {
           setIsPro(false);
           setLoading(false);
@@ -57,6 +61,7 @@ export default function CustomerStorePage({ params }: { params: { storeId: strin
       }
       setLoading(false);
     }
+
     fetchStoreData();
   }, [storeId]);
 
